@@ -1,6 +1,7 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const morgan = require('morgan');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
 
@@ -9,6 +10,13 @@ dotenv.config();
 
 // Connect to database
 connectDB();
+
+// Load models (must be loaded before routes)
+require('./models/Restaurant');
+require('./models/Users');
+require('./models/Allergens');
+require('./models/Ingredient');
+require('./models/MenuItem');
 
 // Initialize Express app
 const app = express();
@@ -23,9 +31,19 @@ app.use(cors({
   credentials: true
 }));
 
+// HTTP request logger
+if (process.env.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined'));
+}
+
 // Mount routers
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/menu', require('./routes/menu'));
+app.use('/api/staff', require('./routes/staff'));
+app.use('/api/qr', require('./routes/qr'));
+app.use('/api/public', require('./routes/public'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -50,14 +68,14 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
-  console.log(`\n🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`📡 API: http://localhost:${PORT}/api`);
-  console.log(`💚 Health Check: http://localhost:${PORT}/api/health\n`);
+  console.log(`\nServer running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log(`API: http://localhost:${PORT}/api`);
+  console.log(`Health Check: http://localhost:${PORT}/api/health\n`);
 });
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (err, promise) => {
-  console.error(`❌ Error: ${err.message}`);
+  console.error(`Error: ${err.message}`);
   // Close server & exit process
   server.close(() => process.exit(1));
 });
