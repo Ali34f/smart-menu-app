@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -31,16 +32,30 @@ const Login: React.FC = () => {
         return;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // 🆕 REAL API CALL TO BACKEND
+      const response = await authService.login({
+        email: formData.email,
+        password: formData.password
+      });
 
-      console.log('Login attempt:', { ...formData, rememberMe });
-      
-      localStorage.setItem('authToken', 'mock-token-12345');
-      localStorage.setItem('userEmail', formData.email);
+      console.log('Login successful:', response);
 
+      // Navigate to dashboard
       navigate('/dashboard');
-    } catch (err) {
-      setError('Login failed. Please try again.');
+
+    } catch (err: any) {
+      console.error('Login error:', err);
+      
+      // Handle different error types
+      if (err.response?.status === 401) {
+        setError('Invalid email or password');
+      } else if (err.response?.data?.message) {
+        setError(err.response.data.message);
+      } else if (err.message) {
+        setError(err.message);
+      } else {
+        setError('Login failed. Please check your connection and try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -76,9 +91,9 @@ const Login: React.FC = () => {
           </div>
 
           {/* Branding */}
-          <h1 className="text-5xl font-bold mb-4">Tandoori Nights</h1>
-          <p className="text-xl mb-2">Staff Management Portal</p>
-          <p className="text-green-300 text-lg">Manage your menu with confidence</p>
+          <h1 className="text-5xl font-bold mb-4">Smart Menu</h1>
+          <p className="text-xl mb-2">Multi-Restaurant Management Platform</p>
+          <p className="text-green-300 text-lg">Manage your restaurant with confidence</p>
         </div>
       </div>
 
@@ -92,7 +107,7 @@ const Login: React.FC = () => {
                 <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-800">Tandoori Nights</h2>
+            <h2 className="text-2xl font-bold text-gray-800">Smart Menu</h2>
           </div>
 
           {/* Welcome Text */}
@@ -229,10 +244,24 @@ const Login: React.FC = () => {
             </button>
           </form>
 
+          {/* Sign Up Link */}
+          <div className="mt-6 text-center">
+            <p className="text-sm text-gray-600">
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/register')}
+                className="font-medium text-green-600 hover:text-green-500 transition"
+              >
+                Sign Up
+              </button>
+            </p>
+          </div>
+
           {/* Footer */}
           <div className="mt-8 text-center">
             <p className="text-xs text-gray-500">
-              Tandoori Nights © 2025
+              Smart Menu © 2025
             </p>
             <div className="mt-2 space-x-4">
               <button
