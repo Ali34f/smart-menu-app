@@ -5,6 +5,8 @@ interface MenuItem {
   description: string;
   category: string;
   price: number;
+  image?: string;
+  allergens?: string[];
   isAvailable: boolean;
   dietaryInfo?: {
     vegetarian?: boolean;
@@ -12,6 +14,7 @@ interface MenuItem {
     glutenFree?: boolean;
     dairyFree?: boolean;
     halal?: boolean;
+    kosher?: boolean;
   };
 }
 
