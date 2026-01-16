@@ -53,5 +53,18 @@ export const menuService = {
   toggleAvailability: async (id: string) => {
     const response = await api.patch(`/menu/${id}/toggle`);
     return response.data;
+  },
+
+  // Upload image
+  uploadImage: async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
   }
 };
