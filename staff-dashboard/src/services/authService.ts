@@ -37,7 +37,7 @@ export const authService = {
   // Login user
   login: async (data: LoginData) => {
     const response = await api.post('/auth/login', data);
-    
+
     // Save token and user info
     if (response.data.token) {
       localStorage.setItem('authToken', response.data.token);
@@ -45,8 +45,11 @@ export const authService = {
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
       localStorage.setItem('userRole', response.data.user.role);
       localStorage.setItem('qrCode', response.data.user.qrCode);
+      if (response.data.user.profilePicture) {
+        localStorage.setItem('profilePicture', response.data.user.profilePicture);
+      }
     }
-    
+
     return response.data;
   },
 
@@ -63,6 +66,7 @@ export const authService = {
     localStorage.removeItem('restaurantName');
     localStorage.removeItem('userRole');
     localStorage.removeItem('qrCode');
+    localStorage.removeItem('profilePicture');
     window.location.href = '/login';
   },
 
@@ -74,5 +78,41 @@ export const authService = {
   // Get user role
   getUserRole: () => {
     return localStorage.getItem('userRole');
+  },
+
+  // Update user profile
+  updateProfile: async (data: { name?: string; currentPassword?: string; newPassword?: string }) => {
+    const response = await api.put('/auth/profile', data);
+
+    // Update localStorage if name changed
+    if (data.name && response.data.success) {
+      localStorage.setItem('userName', data.name);
+    }
+
+    return response.data;
+  },
+
+  // Upload profile picture
+  uploadProfilePicture: async (file: File) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await api.post('/upload/profile-picture', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    // Update localStorage with new profile picture URL
+    if (response.data.success && response.data.data?.url) {
+      localStorage.setItem('profilePicture', response.data.data.url);
+    }
+
+    return response.data;
+  },
+
+  // Get profile picture from localStorage
+  getProfilePicture: () => {
+    return localStorage.getItem('profilePicture');
   }
 };

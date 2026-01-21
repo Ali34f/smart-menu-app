@@ -5,6 +5,7 @@ import { authService } from '../services/authService';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
+import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
 
@@ -43,8 +44,18 @@ const Menu: React.FC = () => {
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const userName = localStorage.getItem('userEmail')?.split('@')[0] || 'User';
+  const userEmail = localStorage.getItem('userEmail') || '';
+  const userName = userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+
+  // Load profile picture
+  useEffect(() => {
+    const savedPic = localStorage.getItem('profilePicture');
+    if (savedPic) {
+      setProfilePicture(savedPic);
+    }
+  }, []);
 
   // Categories from your data
   const categories = ['All Categories', 'Mains', 'Starters', 'Sides', 'Desserts', 'Drinks'];
@@ -242,11 +253,12 @@ const Menu: React.FC = () => {
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
 
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            </div>
+            {/* Profile Dropdown */}
+            <ProfileDropdown
+              userName={userName}
+              userEmail={userEmail}
+              restaurantName={restaurantName}
+            />
           </div>
         </div>
       </header>
@@ -346,9 +358,13 @@ const Menu: React.FC = () => {
           <div className="border-t border-gray-200 p-5 bg-white pb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 min-w-0 flex-1">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                  {userName.charAt(0).toUpperCase()}
-                </div>
+                {profilePicture ? (
+                  <img src={profilePicture} alt={userName} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 capitalize truncate">
                     {userName}
@@ -356,7 +372,7 @@ const Menu: React.FC = () => {
                   <p className="text-xs text-gray-500 truncate">Staff</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={handleLogout}
                 className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition flex-shrink-0"
                 title="Logout"
