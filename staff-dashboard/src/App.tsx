@@ -8,6 +8,7 @@ import Menu from './pages/Menu';
 import AddMenuItem from './pages/AddMenuItem';
 import ViewMenuItem from './pages/ViewMenuItem';
 import EditMenuItem from './pages/EditMenuItem';
+import Profile from './pages/Profile';
 import './App.css';
 
 function App() {
@@ -74,6 +75,15 @@ function App() {
           element={
             <ProtectedRoute>
               <EditMenuItem />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile />
             </ProtectedRoute>
           }
         />

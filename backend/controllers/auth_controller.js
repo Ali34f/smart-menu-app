@@ -151,7 +151,8 @@ exports.login = async (req, res, next) => {
         permissions: user.permissions,
         restaurantId: user.restaurantId._id,
         restaurantName: user.restaurantId.name,
-        qrCode: user.restaurantId.qrCode // 🆕 Include QR code in login response
+        qrCode: user.restaurantId.qrCode,
+        profilePicture: user.profilePicture
       }
     });
   } catch (error) {
@@ -183,4 +184,64 @@ exports.logout = async (req, res, next) => {
     success: true,
     message: 'Logged out successfully'
   });
+};
+
+// @desc    Update user profile
+// @route   PUT /api/auth/profile
+// @access  Private
+exports.updateProfile = async (req, res, next) => {
+  try {
+    const { name, currentPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user.id).select('+password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Update name if provided
+    if (name) {
+      user.name = name;
+    }
+
+    // Update password if provided
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current password is required to change password'
+        });
+      }
+
+      // Verify current password
+      const isMatch = await user.comparePassword(currentPassword);
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: 'Current password is incorrect'
+        });
+      }
+
+      // Set new password
+      user.password = newPassword;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 };

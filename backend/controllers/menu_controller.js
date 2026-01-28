@@ -1,4 +1,5 @@
 const MenuItem = require('../models/MenuItem');
+const { logActivityHelper } = require('./activity_controller');
 
 // @desc    Get all menu items for restaurant
 // @route   GET /api/menu
@@ -61,6 +62,15 @@ exports.createMenuItem = async (req, res, next) => {
     // Populate allergens and ingredients
     await menuItem.populate('ingredients allergens');
 
+    // Log activity
+    await logActivityHelper(
+      req.restaurantId,
+      req.user.id,
+      req.user.name || req.user.email.split('@')[0],
+      'menu_item_created',
+      menuItem.name
+    );
+
     res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
@@ -97,6 +107,15 @@ exports.updateMenuItem = async (req, res, next) => {
       }
     ).populate('ingredients allergens');
 
+    // Log activity
+    await logActivityHelper(
+      req.restaurantId,
+      req.user.id,
+      req.user.name || req.user.email.split('@')[0],
+      'menu_item_updated',
+      menuItem.name
+    );
+
     res.status(200).json({
       success: true,
       message: 'Menu item updated successfully',
@@ -124,7 +143,17 @@ exports.deleteMenuItem = async (req, res, next) => {
       });
     }
 
+    const itemName = menuItem.name;
     await menuItem.deleteOne();
+
+    // Log activity
+    await logActivityHelper(
+      req.restaurantId,
+      req.user.id,
+      req.user.name || req.user.email.split('@')[0],
+      'menu_item_deleted',
+      itemName
+    );
 
     res.status(200).json({
       success: true,
@@ -178,6 +207,15 @@ exports.toggleAvailability = async (req, res, next) => {
 
     menuItem.isAvailable = !menuItem.isAvailable;
     await menuItem.save();
+
+    // Log activity
+    await logActivityHelper(
+      req.restaurantId,
+      req.user.id,
+      req.user.name || req.user.email.split('@')[0],
+      'availability_changed',
+      menuItem.name
+    );
 
     res.status(200).json({
       success: true,

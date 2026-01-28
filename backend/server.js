@@ -49,6 +49,7 @@ app.use('/api/staff', require('./routes/staff'));
 app.use('/api/qr', require('./routes/qr'));
 app.use('/api/public', require('./routes/public'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/activity', require('./routes/activity'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

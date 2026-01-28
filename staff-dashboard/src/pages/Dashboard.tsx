@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
+import { activityService, Activity } from '../services/activityService';
+import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
 
@@ -14,25 +16,96 @@ interface MenuItem {
   isAvailable: boolean;
 }
 
-// TODO: Replace with real activity data from backend later
-interface Activity {
-  id: string;
-  icon: string;
-  emoji: string;
-  text: string;
-  time: string;
-  user: string;
-}
+
+// Helper function to get activity icon based on action type
+const getActivityIcon = (action: string) => {
+  const iconConfig: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
+    'menu_item_created': {
+      bg: 'bg-green-100',
+      color: 'text-green-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+      )
+    },
+    'menu_item_updated': {
+      bg: 'bg-blue-100',
+      color: 'text-blue-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        </svg>
+      )
+    },
+    'menu_item_deleted': {
+      bg: 'bg-red-100',
+      color: 'text-red-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+      )
+    },
+    'availability_changed': {
+      bg: 'bg-orange-100',
+      color: 'text-orange-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      )
+    },
+    'allergen_updated': {
+      bg: 'bg-yellow-100',
+      color: 'text-yellow-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      )
+    },
+    'price_updated': {
+      bg: 'bg-purple-100',
+      color: 'text-purple-600',
+      icon: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      )
+    }
+  };
+
+  return iconConfig[action] || {
+    bg: 'bg-gray-100',
+    color: 'text-gray-600',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    )
+  };
+};
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   // Get user info from localStorage
-  const userName = localStorage.getItem('userEmail')?.split('@')[0] || 'User';
+  const userEmail = localStorage.getItem('userEmail') || '';
+  const userName = userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const [profilePicture, setProfilePicture] = useState<string | null>(null);
+
+  // Load profile picture
+  useEffect(() => {
+    const savedPic = localStorage.getItem('profilePicture');
+    if (savedPic) {
+      setProfilePicture(savedPic);
+    }
+  }, []);
 
   // Get current date/time
   const getCurrentDateTime = () => {
@@ -54,13 +127,16 @@ const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch real menu data from backend
-      const data = await menuService.getAllItems();
-      setMenuItems(data.data || []);
+      // Fetch real menu data and activities from backend
+      const [menuData, activities] = await Promise.all([
+        menuService.getAllItems(),
+        activityService.getActivities(5)
+      ]);
+      setMenuItems(menuData.data || []);
+      setRecentActivity(activities || []);
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
-      setError('Failed to load dashboard data');
-      
+
       if (error.response?.status === 401) {
         navigate('/login');
       }
@@ -77,49 +153,6 @@ const Dashboard: React.FC = () => {
   const mockQueriesToday = 23;
   const mockMostViewedItem = 'Chicken Tikka';
 
-  // TODO: Replace with real activity log from backend
-  const mockRecentActivity: Activity[] = [
-    {
-      id: '1',
-      icon: '🍗',
-      emoji: '🍗',
-      text: 'Chicken Biryani edited',
-      time: '2 hours ago',
-      user: 'Sarah Khan'
-    },
-    {
-      id: '2',
-      icon: '⚠️',
-      emoji: '⚠️',
-      text: 'New allergen added to Samosa',
-      time: '3 hours ago',
-      user: 'Mohammed Khan'
-    },
-    {
-      id: '3',
-      icon: '🍗',
-      emoji: '🍗',
-      text: 'Butter Chicken marked unavailable',
-      time: '5 hours ago',
-      user: 'Priya Sharma'
-    },
-    {
-      id: '4',
-      icon: '💰',
-      emoji: '💰',
-      text: 'Menu prices updated',
-      time: '1 day ago',
-      user: 'Mohammed Khan'
-    },
-    {
-      id: '5',
-      icon: '🍗',
-      emoji: '🍗',
-      text: 'New dish added: Fish Curry',
-      time: '2 days ago',
-      user: 'Sarah Khan'
-    }
-  ];
 
   // TODO: Replace with real popularity data from backend
   const mockPopularItems = [
@@ -194,12 +227,12 @@ const Dashboard: React.FC = () => {
               <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
 
-            {/* Profile */}
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-            </div>
+            {/* Profile Dropdown */}
+            <ProfileDropdown
+              userName={userName}
+              userEmail={userEmail}
+              restaurantName={restaurantName}
+            />
           </div>
         </div>
       </header>
@@ -334,9 +367,13 @@ const Dashboard: React.FC = () => {
           <div className="border-t border-gray-200 p-5 bg-white mt-auto pb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 min-w-0 flex-1">
-                <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                  {userName.charAt(0).toUpperCase()}
-                </div>
+                {profilePicture ? (
+                  <img src={profilePicture} alt={userName} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 capitalize truncate">
                     {userName}
@@ -443,18 +480,25 @@ const Dashboard: React.FC = () => {
                 </div>
                 
                 <div className="space-y-4">
-                  {mockRecentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-0">
-                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                      <div className="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-xl">
-                        {activity.emoji}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-gray-800 font-medium">{activity.text}</p>
-                        <p className="text-sm text-gray-500">{activity.time} · {activity.user}</p>
-                      </div>
-                    </div>
-                  ))}
+                  {recentActivity.length > 0 ? (
+                    recentActivity.map((activity) => {
+                      const iconStyle = getActivityIcon(activity.action);
+                      return (
+                        <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-0">
+                          <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                          <div className={`flex-shrink-0 w-10 h-10 ${iconStyle.bg} rounded-lg flex items-center justify-center ${iconStyle.color}`}>
+                            {iconStyle.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-gray-800 font-medium">{activity.text}</p>
+                            <p className="text-sm text-gray-500">{activity.time} · {activity.user}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">No recent activity yet. Start by adding or editing menu items!</p>
+                  )}
                 </div>
               </div>
 
