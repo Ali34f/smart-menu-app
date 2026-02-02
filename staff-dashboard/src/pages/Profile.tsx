@@ -114,7 +114,20 @@ const Profile: React.FC = () => {
   const loadPreferences = () => {
     const savedPrefs = localStorage.getItem('userPreferences');
     if (savedPrefs) {
-      setPreferences(JSON.parse(savedPrefs));
+      const prefs = JSON.parse(savedPrefs);
+      setPreferences(prefs);
+      
+      // Apply dark mode on load
+      if (prefs.darkMode) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      
+      // Apply language on load
+      if (prefs.language) {
+        document.documentElement.lang = prefs.language;
+      }
     }
   };
 
@@ -167,7 +180,23 @@ const Profile: React.FC = () => {
 
   const handleSavePreferences = () => {
     localStorage.setItem('userPreferences', JSON.stringify(preferences));
+    
+    // Apply dark mode immediately
+    if (preferences.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    
+    // Apply language
+    document.documentElement.lang = preferences.language;
+    
     success('Preferences saved successfully');
+    
+    // Redirect to dashboard after a short delay
+    setTimeout(() => {
+      navigate('/dashboard');
+    }, 1500);
   };
 
   const tabs = [
@@ -189,10 +218,19 @@ const Profile: React.FC = () => {
     )}
   ];
 
+  // Apply dark mode class to body/html when preferences change
+  useEffect(() => {
+    if (preferences.darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [preferences.darkMode]);
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
+      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center space-x-4">
             <button
@@ -213,7 +251,7 @@ const Profile: React.FC = () => {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Profile Card */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center space-x-4">
             {/* Profile Picture with Upload */}
             <div className="relative group">
@@ -269,7 +307,7 @@ const Profile: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
           <div className="border-b border-gray-200">
             <nav className="flex -mb-px">
               {tabs.map(tab => (

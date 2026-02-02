@@ -184,20 +184,24 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Top Navigation Bar */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
+      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="flex items-center justify-between px-6 py-4">
-          {/* Logo and Title */}
+          {/* Logo and Title - Only logo is clickable */}
           <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
+              title="Go to Dashboard"
+            >
               <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
               </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">Smart Menu</h1>
-              <p className="text-sm text-gray-500">Dashboard Overview</p>
+            </button>
+            <div className="text-left">
+              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Dashboard Overview</p>
             </div>
           </div>
 
@@ -239,7 +243,7 @@ const Dashboard: React.FC = () => {
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
         {/* Sidebar - COMPLETELY FIXED (NO SCROLL) */}
-        <aside className="w-64 bg-white shadow-sm flex flex-col h-full">
+        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
           {/* Navigation - Compact spacing */}
           <nav className="p-6 flex flex-col flex-1 justify-between">
             <div className="space-y-2">
@@ -395,7 +399,7 @@ const Dashboard: React.FC = () => {
         </aside>
 
         {/* Main Content - SCROLLABLE ONLY */}
-        <main className="flex-1 overflow-y-auto bg-gray-50">
+        <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
             {/* Welcome Section */}
             <div className="mb-8">

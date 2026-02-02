@@ -13,6 +13,13 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  
+  // Get user role from localStorage
+  const userRole = localStorage.getItem('userRole') || 'staff';
+  
+  const getRoleLabel = (role: string) => {
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  };
 
   // Load profile picture from localStorage
   useEffect(() => {
@@ -126,8 +133,8 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
                 <p className="text-sm font-semibold text-gray-800 capitalize truncate">{userName}</p>
                 <p className="text-xs text-gray-500 truncate">{userEmail}</p>
                 <div className="flex items-center mt-1">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                    Admin
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 capitalize">
+                    {getRoleLabel(userRole)}
                   </span>
                 </div>
               </div>
