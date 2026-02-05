@@ -40,6 +40,7 @@ api.interceptors.response.use(
       localStorage.removeItem('restaurantName');
       localStorage.removeItem('userRole');
       localStorage.removeItem('qrCode');
+      localStorage.removeItem('invitationAccepted');
       window.location.href = '/login';
     }
     return Promise.reject(error);

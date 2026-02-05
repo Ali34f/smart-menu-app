@@ -6,16 +6,49 @@ const Restaurant = require('../models/Restaurant');
 // @access  Private (Owner, Manager)
 exports.getStaff = async (req, res, next) => {
   try {
-    const staff = await User.find({ 
+    // Check if the logged-in user is Mohammed Khan (super owner)
+    const isMohammedKhan = req.user.name.toLowerCase().includes('mohammed khan') || 
+                          req.user.email.toLowerCase().includes('mohammed');
+
+    let staff = [];
+
+    if (isMohammedKhan) {
+      // Mohammed Khan sees himself + all staff from all restaurants
+      // First, get Mohammed Khan's own record
+      const mohammedKhan = await User.findById(req.user.id)
+        .select('-password');
+      
+      // Get all staff from all restaurants (excluding Mohammed Khan)
+      const allStaff = await User.find({ 
+        _id: { $ne: req.user.id }
+      })
+      .select('-password')
+      .populate('restaurantId', 'name')
+      .sort({ createdAt: -1 });
+
+      // Add Mohammed Khan at the beginning
+      staff = mohammedKhan ? [mohammedKhan, ...allStaff] : allStaff;
+    } else {
+      // Regular restaurant owners/managers see their restaurant's staff
+      // Include the restaurant owner in the list
+      staff = await User.find({ 
+        restaurantId: req.restaurantId
+      })
+      .select('-password')
+      .populate('restaurantId', 'name')
+      .sort({ createdAt: -1 });
+    }
+
+    // Count pending invitations
+    const pendingInvitations = await User.countDocuments({
       restaurantId: req.restaurantId,
-      _id: { $ne: req.user.id } // Exclude current user
-    })
-    .select('-password')
-    .sort({ createdAt: -1 });
+      invitationAccepted: false
+    });
 
     res.status(200).json({
       success: true,
       count: staff.length,
+      pendingInvitations,
       data: staff
     });
   } catch (error) {
@@ -60,14 +93,20 @@ exports.addStaff = async (req, res, next) => {
       });
     }
 
-    // Create new staff member
+    // Create new staff member with invitation pending
     const staff = await User.create({
       restaurantId: req.restaurantId,
       name,
       email,
       password,
-      role
+      role,
+      invitationAccepted: false // New invites need to be accepted
     });
+
+    // Debug: Verify invitation status was set correctly
+    console.log('[ADD_STAFF] Created staff:', staff.email);
+    console.log('[ADD_STAFF] Role:', staff.role);
+    console.log('[ADD_STAFF] invitationAccepted:', staff.invitationAccepted);
 
     res.status(201).json({
       success: true,
@@ -76,7 +115,8 @@ exports.addStaff = async (req, res, next) => {
         name: staff.name,
         email: staff.email,
         role: staff.role,
-        restaurantId: staff.restaurantId
+        restaurantId: staff.restaurantId,
+        invitationAccepted: staff.invitationAccepted
       }
     });
   } catch (error) {
@@ -168,18 +208,58 @@ exports.deleteStaff = async (req, res, next) => {
       });
     }
 
-    // Soft delete - just deactivate
-    staff.isActive = false;
-    await staff.save();
+    // Hard delete - completely remove from database
+    await User.findByIdAndDelete(req.params.id);
 
     res.status(200).json({
       success: true,
-      message: 'Staff member deactivated successfully'
+      message: 'Staff member deleted successfully'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: 'Error deleting staff',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Accept invitation
+// @route   POST /api/staff/accept-invitation
+// @access  Private
+exports.acceptInvitation = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (user.invitationAccepted) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invitation already accepted'
+      });
+    }
+
+    user.invitationAccepted = true;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Invitation accepted successfully',
+      data: {
+        id: user._id,
+        invitationAccepted: user.invitationAccepted
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error accepting invitation',
       error: error.message
     });
   }

@@ -216,7 +216,7 @@ const Dashboard: React.FC = () => {
               <input
                 type="text"
                 placeholder="Search menu items..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
             </div>
           </div>
@@ -258,34 +258,34 @@ const Dashboard: React.FC = () => {
               {/* Menu Items */}
               <button
                 onClick={() => navigate('/menu-items')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
-                <Icon path={mdiSilverwareForkKnife} size={0.8} className="text-gray-700 flex-shrink-0" />
+                <Icon path={mdiSilverwareForkKnife} size={0.8} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
                 <span className="flex-1 text-left">Menu Items</span>
               </button>
 
               {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
-                <Icon path={mdiShield} size={1} className="text-gray-700 flex-shrink-0" />
+                <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
                 <span className="flex-1 text-left">Allergens</span>
               </button>
 
               {/* Ingredients */}
               <button
                 onClick={() => navigate('/ingredients')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
-                <Icon path={mdiLeaf} size={1} className="text-gray-700 flex-shrink-0" />
+                <Icon path={mdiLeaf} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
                 <span className="flex-1 text-left">Ingredients</span>
               </button>
 
               {/* Staff Management */}
               <button
                 onClick={() => navigate('/staff')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -296,7 +296,7 @@ const Dashboard: React.FC = () => {
               {/* QR Codes */}
               <button
                 onClick={() => navigate('/qr-codes')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
@@ -310,7 +310,7 @@ const Dashboard: React.FC = () => {
               {/* Reports */}
               <button
                 onClick={() => navigate('/reports')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -321,7 +321,7 @@ const Dashboard: React.FC = () => {
               {/* Settings */}
               <button
                 onClick={() => navigate('/settings')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg font-medium text-sm transition"
+                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -333,34 +333,34 @@ const Dashboard: React.FC = () => {
           </nav>
 
           {/* Quick Stats Card */}
-          <div className="mx-6 mb-4 p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border border-green-200">
-            <p className="text-xs font-semibold text-green-800 mb-2">Today's Overview</p>
+          <div className="mx-6 mb-4 p-3 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl border border-green-200 dark:border-green-800">
+            <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-2">Today's Overview</p>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700">Total Items</span>
-                <span className="text-sm font-bold text-green-900">{totalItems}</span>
+                <span className="text-xs text-green-700 dark:text-green-400">Total Items</span>
+                <span className="text-sm font-bold text-green-900 dark:text-green-200">{totalItems}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700">Active</span>
-                <span className="text-sm font-bold text-green-900">{activeItems}</span>
+                <span className="text-xs text-green-700 dark:text-green-400">Active</span>
+                <span className="text-sm font-bold text-green-900 dark:text-green-200">{activeItems}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700">Queries</span>
-                <span className="text-sm font-bold text-green-900">{mockQueriesToday}</span>
+                <span className="text-xs text-green-700 dark:text-green-400">Queries</span>
+                <span className="text-sm font-bold text-green-900 dark:text-green-200">{mockQueriesToday}</span>
               </div>
             </div>
           </div>
 
           {/* Help Card */}
-          <div className="mx-6 mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="mx-6 mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-start space-x-2">
-              <svg className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-blue-900 mb-0.5">Need Help?</p>
-                <p className="text-xs text-blue-700 leading-relaxed">Tips for managing your restaurant menu.</p>
-                <button className="mt-1.5 text-xs font-medium text-blue-600 hover:text-blue-700">
+                <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-0.5">Need Help?</p>
+                <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">Tips for managing your restaurant menu.</p>
+                <button className="mt-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
                   View Guide →
                 </button>
               </div>
@@ -368,7 +368,7 @@ const Dashboard: React.FC = () => {
           </div>
 
           {/* Fixed User Card at Bottom */}
-          <div className="border-t border-gray-200 p-5 bg-white mt-auto pb-6">
+          <div className="border-t border-gray-200 dark:border-gray-700 p-5 bg-white dark:bg-gray-800 mt-auto pb-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3 min-w-0 flex-1">
                 {profilePicture ? (
@@ -379,15 +379,15 @@ const Dashboard: React.FC = () => {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-800 capitalize truncate">
+                  <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">
                     {userName}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">Staff</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition flex-shrink-0"
+                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition flex-shrink-0"
                 title="Logout"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -403,23 +403,23 @@ const Dashboard: React.FC = () => {
           <div className="p-8">
             {/* Welcome Section */}
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 mb-2">
+              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
                 Welcome back, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
               </h2>
-              <p className="text-gray-600">{getCurrentDateTime()}</p>
+              <p className="text-gray-600 dark:text-gray-400">{getCurrentDateTime()}</p>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {/* Total Menu Items - REAL DATA ✅ */}
-              <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 text-sm mb-1">Total Menu Items</p>
-                    <p className="text-4xl font-bold text-gray-800">{totalItems}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Total Menu Items</p>
+                    <p className="text-4xl font-bold text-gray-800 dark:text-white">{totalItems}</p>
                   </div>
-                  <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
-                    <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-14 h-14 bg-green-100 dark:bg-green-900/50 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                     </svg>
                   </div>
@@ -427,14 +427,14 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Active Items - REAL DATA ✅ */}
-              <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 text-sm mb-1">Active Items</p>
-                    <p className="text-4xl font-bold text-gray-800">{activeItems}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Active Items</p>
+                    <p className="text-4xl font-bold text-gray-800 dark:text-white">{activeItems}</p>
                   </div>
-                  <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
-                    <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-14 h-14 bg-green-100 dark:bg-green-900/50 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
@@ -442,14 +442,14 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Queries Today - MOCK DATA (for now) */}
-              <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 text-sm mb-1">Queries Today</p>
-                    <p className="text-4xl font-bold text-gray-800">{mockQueriesToday}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Queries Today</p>
+                    <p className="text-4xl font-bold text-gray-800 dark:text-white">{mockQueriesToday}</p>
                   </div>
-                  <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
@@ -457,14 +457,14 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* Most Viewed - MOCK DATA (for now) */}
-              <div className="bg-white rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 text-sm mb-1">Most Viewed</p>
-                    <p className="text-xl font-bold text-gray-800">{mockMostViewedItem}</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Most Viewed</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-white">{mockMostViewedItem}</p>
                   </div>
-                  <div className="w-14 h-14 bg-orange-100 rounded-xl flex items-center justify-center">
-                    <svg className="w-7 h-7 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/50 rounded-xl flex items-center justify-center">
+                    <svg className="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                     </svg>
                   </div>
@@ -475,50 +475,50 @@ const Dashboard: React.FC = () => {
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
               {/* Recent Activity - Left Column (2/3 width) */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm p-6">
+              <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-800">Recent Activity</h3>
-                  <button className="text-green-600 hover:text-green-700 text-sm font-medium">
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">Recent Activity</h3>
+                  <button className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium">
                     View All
                   </button>
                 </div>
-                
+
                 <div className="space-y-4">
                   {recentActivity.length > 0 ? (
                     recentActivity.map((activity) => {
                       const iconStyle = getActivityIcon(activity.action);
                       return (
-                        <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 last:border-0">
+                        <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0">
                           <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
                           <div className={`flex-shrink-0 w-10 h-10 ${iconStyle.bg} rounded-lg flex items-center justify-center ${iconStyle.color}`}>
                             {iconStyle.icon}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-gray-800 font-medium">{activity.text}</p>
-                            <p className="text-sm text-gray-500">{activity.time} · {activity.user}</p>
+                            <p className="text-gray-800 dark:text-white font-medium">{activity.text}</p>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">{activity.time} · {activity.user}</p>
                           </div>
                         </div>
                       );
                     })
                   ) : (
-                    <p className="text-gray-500 text-center py-4">No recent activity yet. Start by adding or editing menu items!</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">No recent activity yet. Start by adding or editing menu items!</p>
                   )}
                 </div>
               </div>
 
               {/* Popular This Week - Right Column (1/3 width) */}
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="text-xl font-bold text-gray-800 mb-6">Popular This Week</h3>
-                
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Popular This Week</h3>
+
                 <div className="space-y-4">
                   {mockPopularItems.map((item, index) => (
                     <div key={index} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 font-medium truncate mr-2">{item.name}</span>
-                        <span className="text-gray-500 flex-shrink-0">{item.views}</span>
+                        <span className="text-gray-700 dark:text-gray-300 font-medium truncate mr-2">{item.name}</span>
+                        <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">{item.views}</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
+                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                        <div
                           className="bg-green-500 h-2 rounded-full transition-all duration-500"
                           style={{ width: `${(item.views / 360) * 100}%` }}
                         ></div>
@@ -531,7 +531,7 @@ const Dashboard: React.FC = () => {
 
             {/* Quick Actions */}
             <div className="mb-8">
-              <h3 className="text-xl font-bold text-gray-800 mb-6">Quick Actions</h3>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Quick Actions</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <button 
                   onClick={() => navigate('/menu-items/new')}
@@ -576,55 +576,55 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Most Filtered Allergens - Donut Chart */}
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-8">
-              <h3 className="text-xl font-bold text-gray-800 mb-8">Most Filtered Allergens</h3>
-              
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-8">Most Filtered Allergens</h3>
+
               <div className="flex flex-col md:flex-row items-center justify-center gap-12">
                 {/* Donut Chart */}
                 <div className="relative w-64 h-64 flex-shrink-0">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
                     {/* Red - Gluten 35% */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      fill="none" 
-                      stroke="#EF4444" 
-                      strokeWidth="20" 
-                      strokeDasharray={`${35 * 2.51} ${(100-35) * 2.51}`} 
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#EF4444"
+                      strokeWidth="20"
+                      strokeDasharray={`${35 * 2.51} ${(100-35) * 2.51}`}
                       strokeDashoffset="0"
                     />
                     {/* Orange - Dairy 25% */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      fill="none" 
-                      stroke="#F59E0B" 
-                      strokeWidth="20" 
-                      strokeDasharray={`${25 * 2.51} ${(100-25) * 2.51}`} 
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#F59E0B"
+                      strokeWidth="20"
+                      strokeDasharray={`${25 * 2.51} ${(100-25) * 2.51}`}
                       strokeDashoffset={`-${35 * 2.51}`}
                     />
                     {/* Blue - Other 27% */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      fill="none" 
-                      stroke="#3B82F6" 
-                      strokeWidth="20" 
-                      strokeDasharray={`${27 * 2.51} ${(100-27) * 2.51}`} 
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#3B82F6"
+                      strokeWidth="20"
+                      strokeDasharray={`${27 * 2.51} ${(100-27) * 2.51}`}
                       strokeDashoffset={`-${(35+25) * 2.51}`}
                     />
                     {/* Gray - Nuts 13% */}
-                    <circle 
-                      cx="50" 
-                      cy="50" 
-                      r="40" 
-                      fill="none" 
-                      stroke="#6B7280" 
-                      strokeWidth="20" 
-                      strokeDasharray={`${13 * 2.51} ${(100-13) * 2.51}`} 
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke="#6B7280"
+                      strokeWidth="20"
+                      strokeDasharray={`${13 * 2.51} ${(100-13) * 2.51}`}
                       strokeDashoffset={`-${(35+25+27) * 2.51}`}
                     />
                   </svg>
@@ -634,13 +634,13 @@ const Dashboard: React.FC = () => {
                 <div className="space-y-4">
                   {mockAllergenData.map((allergen, index) => (
                     <div key={index} className="flex items-center space-x-4">
-                      <div 
+                      <div
                         className="w-4 h-4 rounded-full flex-shrink-0"
                         style={{ backgroundColor: allergen.color }}
                       ></div>
                       <div className="flex items-center justify-between min-w-[120px]">
-                        <span className="text-gray-700 font-medium">{allergen.name}</span>
-                        <span className="text-gray-600 font-semibold ml-4">{allergen.percentage}%</span>
+                        <span className="text-gray-700 dark:text-gray-300 font-medium">{allergen.name}</span>
+                        <span className="text-gray-600 dark:text-gray-400 font-semibold ml-4">{allergen.percentage}%</span>
                       </div>
                     </div>
                   ))}

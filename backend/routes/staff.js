@@ -4,7 +4,8 @@ const {
   getStaff,
   addStaff,
   updateStaff,
-  deleteStaff
+  deleteStaff,
+  acceptInvitation
 } = require('../controllers/staff_controller');
 
 const { protect, authorize, checkPermission } = require('../middleware/auth');
@@ -23,5 +24,8 @@ router.put('/:id', authorize('owner', 'manager'), checkPermission('canManageStaf
 
 // Delete staff - Only Owner can delete
 router.delete('/:id', authorize('owner'), deleteStaff);
+
+// Accept invitation - Any authenticated user
+router.post('/accept-invitation', acceptInvitation);
 
 module.exports = router;

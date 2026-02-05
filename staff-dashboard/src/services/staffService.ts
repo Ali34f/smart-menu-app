@@ -30,5 +30,11 @@ export const staffService = {
   deleteStaff: async (id: string) => {
     const response = await api.delete(`/staff/${id}`);
     return response.data;
+  },
+
+  // Accept invitation
+  acceptInvitation: async () => {
+    const response = await api.post('/staff/accept-invitation');
+    return response.data;
   }
 };

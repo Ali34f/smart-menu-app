@@ -44,7 +44,19 @@ export const authService = {
       localStorage.setItem('userEmail', response.data.user.email);
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
       localStorage.setItem('userRole', response.data.user.role);
-      localStorage.setItem('qrCode', response.data.user.qrCode);
+      localStorage.setItem('qrCode', response.data.user.qrCode || '');
+
+      // Save invitation status - check if explicitly false (boolean)
+      // Debug logging to trace the issue
+      console.log('[AUTH] Backend response invitationAccepted:', response.data.user.invitationAccepted);
+      console.log('[AUTH] Type:', typeof response.data.user.invitationAccepted);
+      console.log('[AUTH] User role:', response.data.user.role);
+
+      // Store as 'false' string only if backend returns boolean false
+      const invitationAccepted = response.data.user.invitationAccepted === false ? 'false' : 'true';
+      console.log('[AUTH] Storing invitationAccepted as:', invitationAccepted);
+      localStorage.setItem('invitationAccepted', invitationAccepted);
+
       if (response.data.user.profilePicture) {
         localStorage.setItem('profilePicture', response.data.user.profilePicture);
       }
@@ -67,6 +79,7 @@ export const authService = {
     localStorage.removeItem('userRole');
     localStorage.removeItem('qrCode');
     localStorage.removeItem('profilePicture');
+    localStorage.removeItem('invitationAccepted');
     window.location.href = '/login';
   },
 

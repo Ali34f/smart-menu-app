@@ -68,6 +68,10 @@ const userSchema = new mongoose.Schema({
   profilePicture: {
     type: String,
     default: null
+  },
+  invitationAccepted: {
+    type: Boolean,
+    default: true // Owners and directly registered users have it true by default
   }
 }, {
   timestamps: true
@@ -114,6 +118,8 @@ userSchema.pre('save', function(next) {
       canViewReports: true,
       canManageStaff: true
     };
+    // Owners always have invitation accepted
+    this.invitationAccepted = true;
   } else if (this.role === 'manager') {
     this.permissions = {
       canManageMenu: true,

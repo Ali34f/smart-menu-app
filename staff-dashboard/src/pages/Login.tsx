@@ -102,7 +102,7 @@ const Login: React.FC = () => {
       </div>
 
       {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white dark:bg-gray-900">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
@@ -111,13 +111,13 @@ const Login: React.FC = () => {
                 <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-800">Smart Menu</h2>
+            <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Smart Menu</h2>
           </div>
 
           {/* Welcome Text */}
           <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-            <p className="text-gray-600">Sign in to your account</p>
+            <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Welcome Back</h2>
+            <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
           </div>
 
           {/* Error Message */}
@@ -131,7 +131,7 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Email Address
               </label>
               <div className="relative">
@@ -149,14 +149,14 @@ const Login: React.FC = () => {
                   value={formData.email}
                   onChange={handleInputChange}
                   placeholder="you@restaurant.com"
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                  className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                 />
               </div>
             </div>
 
             {/* Password Field */}
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Password
               </label>
               <div className="relative">
@@ -174,12 +174,12 @@ const Login: React.FC = () => {
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="••••••••"
-                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                  className="block w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
                 >
                   {showPassword ? (
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,9 +204,9 @@ const Login: React.FC = () => {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600 rounded cursor-pointer"
                 />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 cursor-pointer">
+                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   Remember me
                 </label>
               </div>
@@ -215,7 +215,7 @@ const Login: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/forgot-password')}
-                  className="text-sm font-medium text-green-600 hover:text-green-500 transition"
+                  className="text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 transition"
                 >
                   Forgot password?
                 </button>
@@ -241,10 +241,10 @@ const Login: React.FC = () => {
             {/* Divider */}
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
+                <div className="w-full border-t border-gray-300 dark:border-gray-600"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">or</span>
+                <span className="px-2 bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400">or</span>
               </div>
             </div>
 
@@ -252,7 +252,7 @@ const Login: React.FC = () => {
             <button
               type="button"
               onClick={handleGoogleSignIn}
-              className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
+              className="w-full flex items-center justify-center py-3 px-4 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm bg-white dark:bg-gray-800 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition"
             >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -266,12 +266,12 @@ const Login: React.FC = () => {
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Don't have an account?{' '}
               <button
                 type="button"
                 onClick={() => navigate('/register')}
-                className="font-medium text-green-600 hover:text-green-500 transition"
+                className="font-medium text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 transition"
               >
                 Sign Up
               </button>
@@ -280,19 +280,19 @@ const Login: React.FC = () => {
 
           {/* Footer */}
           <div className="mt-8 text-center">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Smart Menu © 2025
             </p>
             <div className="mt-2 space-x-4">
               <button
                 type="button"
-                className="text-xs text-green-600 hover:text-green-500"
+                className="text-xs text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300"
               >
                 Privacy Policy
               </button>
               <button
                 type="button"
-                className="text-xs text-green-600 hover:text-green-500"
+                className="text-xs text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300"
               >
                 Terms
               </button>

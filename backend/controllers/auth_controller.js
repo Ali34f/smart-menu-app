@@ -64,7 +64,8 @@ exports.register = async (req, res, next) => {
       name: ownerName,
       email: ownerEmail,
       password: ownerPassword,
-      role: 'owner'
+      role: 'owner',
+      invitationAccepted: true // Owners don't need to accept invitations
     });
 
     // Generate JWT token
@@ -132,9 +133,17 @@ exports.login = async (req, res, next) => {
       });
     }
 
+    // Debug: Log invitation status before save
+    console.log('[LOGIN] User:', user.email);
+    console.log('[LOGIN] Role:', user.role);
+    console.log('[LOGIN] invitationAccepted BEFORE save:', user.invitationAccepted);
+
     // Update last login
     user.lastLogin = Date.now();
     await user.save();
+
+    // Debug: Log invitation status after save
+    console.log('[LOGIN] invitationAccepted AFTER save:', user.invitationAccepted);
 
     // Generate JWT token
     const token = user.getSignedJwtToken();
@@ -152,7 +161,8 @@ exports.login = async (req, res, next) => {
         restaurantId: user.restaurantId._id,
         restaurantName: user.restaurantId.name,
         qrCode: user.restaurantId.qrCode,
-        profilePicture: user.profilePicture
+        profilePicture: user.profilePicture,
+        invitationAccepted: user.invitationAccepted
       }
     });
   } catch (error) {

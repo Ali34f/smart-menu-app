@@ -256,14 +256,14 @@ const Register: React.FC = () => {
       </div>
 
       {/* Right Side - Scrollable Form (offset by left panel width) */}
-      <div className="w-full lg:w-3/5 lg:ml-[40%] min-h-screen bg-gray-50">
-        <div 
+      <div className="w-full lg:w-3/5 lg:ml-[40%] min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div
           id="right-panel"
           className="w-full h-screen overflow-y-auto"
         >
           <div className="flex items-start justify-center p-6 lg:p-8">
-            <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-8 lg:p-12 my-8">
-              
+            <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 lg:p-12 my-8">
+
               {/* Mobile Logo */}
               <div className="lg:hidden text-center mb-6">
                 <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
@@ -271,15 +271,15 @@ const Register: React.FC = () => {
                     <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
                   </svg>
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800">Smart Menu</h2>
+                <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Smart Menu</h2>
               </div>
 
               {/* Header - matches your design */}
               <div className="text-center mb-8">
-                <h2 className="text-3xl lg:text-4xl font-bold text-gray-800 mb-2">
+                <h2 className="text-3xl lg:text-4xl font-bold text-gray-800 dark:text-white mb-2">
                   Create Restaurant Account
                 </h2>
-                <p className="text-gray-600">
+                <p className="text-gray-600 dark:text-gray-400">
                   Join Smart Menu and start managing your restaurant
                 </p>
               </div>
@@ -298,13 +298,13 @@ const Register: React.FC = () => {
                 {/* STEP 1: Restaurant Information */}
                 {step === 1 && (
                   <div className="space-y-6">
-                    <div className="border-b border-gray-200 pb-4">
-                      <h3 className="text-xl font-semibold text-gray-800">Restaurant Information</h3>
+                    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
+                      <h3 className="text-xl font-semibold text-gray-800 dark:text-white">Restaurant Information</h3>
                     </div>
 
                     {/* Restaurant Name */}
                     <div>
-                      <label htmlFor="restaurantName" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="restaurantName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Restaurant Name
                       </label>
                       <div className="relative">
@@ -321,14 +321,14 @@ const Register: React.FC = () => {
                           value={formData.restaurantName}
                           onChange={handleInputChange}
                           placeholder="e.g. Tandoori Nights"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
 
                     {/* Restaurant Type / Cuisine */}
                     <div>
-                      <label htmlFor="cuisineType" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="cuisineType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Restaurant Type / Cuisine
                       </label>
                       <div className="relative">
@@ -343,7 +343,7 @@ const Register: React.FC = () => {
                           required
                           value={formData.cuisineType}
                           onChange={handleInputChange}
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition appearance-none bg-white"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition appearance-none"
                         >
                           <option value="">Select cuisine type</option>
                           {CUISINE_TYPES.map(cuisine => (
@@ -355,7 +355,7 @@ const Register: React.FC = () => {
 
                     {/* Restaurant Email */}
                     <div>
-                      <label htmlFor="restaurantEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="restaurantEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Restaurant Email
                       </label>
                       <div className="relative">
@@ -372,14 +372,14 @@ const Register: React.FC = () => {
                           value={formData.restaurantEmail}
                           onChange={handleInputChange}
                           placeholder="contact@restaurant.com"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
 
                     {/* Phone Number */}
                     <div>
-                      <label htmlFor="restaurantPhone" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="restaurantPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Phone Number
                       </label>
                       <div className="relative">
@@ -396,18 +396,18 @@ const Register: React.FC = () => {
                           value={formData.restaurantPhone}
                           onChange={handleInputChange}
                           placeholder="+44 1234 567890"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
 
                     {/* Restaurant Address Section */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-lg font-medium text-gray-800 mb-4">Restaurant Address</h4>
-                      
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                      <h4 className="text-lg font-medium text-gray-800 dark:text-white mb-4">Restaurant Address</h4>
+
                       {/* Street Address */}
                       <div className="mb-4">
-                        <label htmlFor="street" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="street" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Street Address
                         </label>
                         <div className="relative">
@@ -425,7 +425,7 @@ const Register: React.FC = () => {
                             value={formData.street}
                             onChange={handleInputChange}
                             placeholder="123 High Street"
-                            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                            className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                           />
                         </div>
                       </div>
@@ -433,7 +433,7 @@ const Register: React.FC = () => {
                       {/* City and Postcode (2 columns) */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                          <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-2">
+                          <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             City / Town
                           </label>
                           <input
@@ -444,12 +444,12 @@ const Register: React.FC = () => {
                             value={formData.city}
                             onChange={handleInputChange}
                             placeholder="e.g. London"
-                            className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                            className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                           />
                         </div>
 
                         <div>
-                          <label htmlFor="postcode" className="block text-sm font-medium text-gray-700 mb-2">
+                          <label htmlFor="postcode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Postcode
                           </label>
                           <input
@@ -460,14 +460,14 @@ const Register: React.FC = () => {
                             value={formData.postcode}
                             onChange={handleInputChange}
                             placeholder="e.g. TQ3 3AA"
-                            className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                            className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                           />
                         </div>
                       </div>
 
                       {/* Country (disabled) */}
                       <div>
-                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor="country" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                           Country
                         </label>
                         <input
@@ -476,26 +476,26 @@ const Register: React.FC = () => {
                           type="text"
                           value={formData.country}
                           disabled
-                          className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed"
+                          className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-100 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                         />
                       </div>
                     </div>
 
                     {/* Restaurant Logo (Optional) */}
-                    <div className="border-t border-gray-200 pt-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Restaurant Logo (Optional)
                       </label>
                       <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 transition">
                           <div className="flex flex-col items-center justify-center pt-5 pb-6">
                             <svg className="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                             </svg>
-                            <p className="mb-2 text-sm text-gray-500">
+                            <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                               <span className="font-semibold">Click to upload</span> or drag and drop
                             </p>
-                            <p className="text-xs text-gray-500">PNG, JPG or JPEG (MAX. 5MB)</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">PNG, JPG or JPEG (MAX. 5MB)</p>
                           </div>
                           <input
                             type="file"
@@ -506,7 +506,7 @@ const Register: React.FC = () => {
                         </label>
                       </div>
                       {formData.logo && (
-                        <p className="mt-2 text-sm text-green-600">
+                        <p className="mt-2 text-sm text-green-600 dark:text-green-400">
                           ✓ Logo uploaded: {formData.logo.name}
                         </p>
                       )}
@@ -528,23 +528,23 @@ const Register: React.FC = () => {
                 {/* STEP 2: Create Admin Account */}
                 {step === 2 && (
                   <div className="space-y-6">
-                    <div className="border-b border-gray-200 pb-4">
+                    <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
                       <button
                         type="button"
                         onClick={handleBack}
-                        className="flex items-center text-green-600 hover:text-green-700 font-medium mb-3 transition"
+                        className="flex items-center text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 font-medium mb-3 transition"
                       >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                         </svg>
                         Back to Restaurant Information
                       </button>
-                      <h3 className="text-xl font-semibold text-gray-800">Create Admin Account</h3>
+                      <h3 className="text-xl font-semibold text-gray-800 dark:text-white">Create Admin Account</h3>
                     </div>
 
                     {/* Admin Name */}
                     <div>
-                      <label htmlFor="ownerName" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="ownerName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Admin Name
                       </label>
                       <div className="relative">
@@ -561,14 +561,14 @@ const Register: React.FC = () => {
                           value={formData.ownerName}
                           onChange={handleInputChange}
                           placeholder="Your full name"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
 
                     {/* Admin Email */}
                     <div>
-                      <label htmlFor="ownerEmail" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="ownerEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Admin Email
                       </label>
                       <div className="relative">
@@ -585,14 +585,14 @@ const Register: React.FC = () => {
                           value={formData.ownerEmail}
                           onChange={handleInputChange}
                           placeholder="admin@restaurant.com"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
 
                     {/* Password */}
                     <div>
-                      <label htmlFor="ownerPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="ownerPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Password
                       </label>
                       <div className="relative">
@@ -609,15 +609,15 @@ const Register: React.FC = () => {
                           value={formData.ownerPassword}
                           onChange={handleInputChange}
                           placeholder="••••••••"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
-                      <p className="mt-2 text-sm text-gray-500">Must be at least 8 characters</p>
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Must be at least 8 characters</p>
                     </div>
 
                     {/* Confirm Password */}
                     <div>
-                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+                      <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Confirm Password
                       </label>
                       <div className="relative">
@@ -634,7 +634,7 @@ const Register: React.FC = () => {
                           value={formData.confirmPassword}
                           onChange={handleInputChange}
                           placeholder="••••••••"
-                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                         />
                       </div>
                     </div>
@@ -647,15 +647,15 @@ const Register: React.FC = () => {
                         type="checkbox"
                         checked={formData.agreeToTerms}
                         onChange={handleCheckboxChange}
-                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded mt-1 cursor-pointer"
+                        className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 dark:border-gray-600 rounded mt-1 cursor-pointer"
                       />
-                      <label htmlFor="agreeToTerms" className="ml-3 text-sm text-gray-700 cursor-pointer">
+                      <label htmlFor="agreeToTerms" className="ml-3 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                         I agree to the{' '}
-                        <button type="button" className="text-green-600 hover:text-green-500 font-medium">
+                        <button type="button" className="text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 font-medium">
                           Terms of Service
                         </button>
                         {' '}and{' '}
-                        <button type="button" className="text-green-600 hover:text-green-500 font-medium">
+                        <button type="button" className="text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 font-medium">
                           Privacy Policy
                         </button>
                       </label>
@@ -687,12 +687,12 @@ const Register: React.FC = () => {
 
               {/* Sign In Link */}
               <div className="mt-8 text-center">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   Already have an account?{' '}
                   <button
                     type="button"
                     onClick={() => navigate('/login')}
-                    className="font-medium text-green-600 hover:text-green-500 transition"
+                    className="font-medium text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300 transition"
                   >
                     Sign In
                   </button>
@@ -700,15 +700,15 @@ const Register: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="mt-8 text-center border-t border-gray-200 pt-6">
-                <p className="text-xs text-gray-500">
+              <div className="mt-8 text-center border-t border-gray-200 dark:border-gray-700 pt-6">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Smart Menu © 2025
                 </p>
                 <div className="mt-2 space-x-4">
-                  <button type="button" className="text-xs text-green-600 hover:text-green-500">
+                  <button type="button" className="text-xs text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300">
                     Privacy Policy
                   </button>
-                  <button type="button" className="text-xs text-green-600 hover:text-green-500">
+                  <button type="button" className="text-xs text-green-600 dark:text-green-400 hover:text-green-500 dark:hover:text-green-300">
                     Terms
                   </button>
                 </div>
