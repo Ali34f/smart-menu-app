@@ -6,6 +6,7 @@ interface DeleteConfirmationModalProps {
   onConfirm: () => void;
   itemName: string;
   loading?: boolean;
+  title?: string;
 }
 
 const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
@@ -13,7 +14,8 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
   onClose,
   onConfirm,
   itemName,
-  loading = false
+  loading = false,
+  title = 'Delete Menu Item?'
 }) => {
   if (!isOpen) return null;
 
@@ -40,7 +42,7 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
           {/* Content */}
           <div className="px-6 pb-6 text-center">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              Delete Menu Item?
+              {title}
             </h3>
             <p className="text-gray-600 mb-1">
               Are you sure you want to delete

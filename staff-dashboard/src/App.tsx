@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import ForgotPassword from './pages/Forgot_Password';
 import Dashboard from './pages/Dashboard';
 import Menu from './pages/Menu';
 import AddMenuItem from './pages/AddMenuItem';
@@ -10,14 +10,15 @@ import ViewMenuItem from './pages/ViewMenuItem';
 import EditMenuItem from './pages/EditMenuItem';
 import Profile from './pages/Profile';
 import Staff from './pages/Staff';
+import Ingredients from './pages/Ingredients';
+import AddIngredient from './pages/AddIngredient';
+import ViewIngredient from './pages/ViewIngredient';
+import EditIngredient from './pages/EditIngredient';
 import InvitationAcceptance from './components/InvitationAcceptance';
 import './App.css';
 
 function App() {
-  const [invitationAccepted, setInvitationAccepted] = useState<string | null>(null);
-  const [showInvitationModal, setShowInvitationModal] = useState(false);
-
-  // Apply saved preferences on app load and check invitation status
+  // Apply saved preferences on app load
   useEffect(() => {
     const savedPrefs = localStorage.getItem('userPreferences');
     if (savedPrefs) {
@@ -37,40 +38,7 @@ function App() {
         console.error('Error loading preferences:', error);
       }
     }
-
-    // Check invitation status on mount
-    checkInvitationStatus();
-    
-    // Listen for storage changes (when login happens)
-    const handleStorageChange = () => {
-      checkInvitationStatus();
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also check periodically in case localStorage was updated in same window
-    const interval = setInterval(checkInvitationStatus, 500);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
   }, []);
-
-  const checkInvitationStatus = () => {
-    const invitationStatus = localStorage.getItem('invitationAccepted');
-    const userRole = localStorage.getItem('userRole');
-    const isAuthenticated = localStorage.getItem('authToken') !== null;
-    
-    // Only show modal if user is authenticated, not an owner, and invitation not accepted
-    if (isAuthenticated && userRole !== 'owner' && invitationStatus === 'false') {
-      setInvitationAccepted('false');
-      setShowInvitationModal(true);
-    } else {
-      setInvitationAccepted(invitationStatus);
-      setShowInvitationModal(false);
-    }
-  };
 
   // Check if user is authenticated
   const isAuthenticated = (): boolean => {
@@ -87,14 +55,13 @@ function App() {
     const userRole = localStorage.getItem('userRole');
     const invitationStatus = localStorage.getItem('invitationAccepted');
 
-    // Debug logging
-    console.log('[PROTECTED_ROUTE] userRole:', userRole);
-    console.log('[PROTECTED_ROUTE] invitationStatus:', invitationStatus);
-    console.log('[PROTECTED_ROUTE] Check result:', userRole !== 'owner' && invitationStatus === 'false');
-
     // Block access if invitation not accepted (except for owners)
-    if (userRole !== 'owner' && invitationStatus === 'false') {
-      console.log('[PROTECTED_ROUTE] Showing invitation modal');
+    // invitationStatus 'false' = invited staff/manager who hasn't accepted yet
+    // invitationStatus null = stale session; require non-owners to accept
+    const needsToAccept =
+      userRole !== 'owner' && invitationStatus !== 'true';
+
+    if (needsToAccept) {
       return (
         <>
           <InvitationAcceptance
@@ -114,13 +81,13 @@ function App() {
   };
 
   return (
-    <Router>
-      <Routes>
+    <LanguageProvider>
+      <Router>
+        <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        
+
         {/* Protected Routes */}
         <Route 
           path="/dashboard" 
@@ -185,13 +152,50 @@ function App() {
           }
         />
 
+        <Route
+          path="/ingredients"
+          element={
+            <ProtectedRoute>
+              <Ingredients />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ingredients/new"
+          element={
+            <ProtectedRoute>
+              <AddIngredient />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ingredients/edit/:id"
+          element={
+            <ProtectedRoute>
+              <EditIngredient />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/ingredients/:id"
+          element={
+            <ProtectedRoute>
+              <ViewIngredient />
+            </ProtectedRoute>
+          }
+        />
+
         {/* Default Route - Redirect to Login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         
         {/* Catch All - Redirect to Login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </LanguageProvider>
   );
 }
 
