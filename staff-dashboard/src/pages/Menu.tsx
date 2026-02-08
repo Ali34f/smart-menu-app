@@ -45,7 +45,7 @@ const Menu: React.FC = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const userEmail = localStorage.getItem('userEmail') || '';
-  const userName = userEmail.split('@')[0] || 'User';
+  const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 

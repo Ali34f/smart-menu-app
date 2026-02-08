@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
+import { useLanguage } from '../contexts/LanguageContext';
 
 type TabType = 'profile' | 'preferences' | 'settings';
 
@@ -28,6 +29,7 @@ interface Preferences {
 const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { t } = useLanguage();
   const { toasts, removeToast, success, error } = useToast();
 
   const initialTab = (searchParams.get('tab') as TabType) || 'profile';
@@ -69,7 +71,7 @@ const Profile: React.FC = () => {
 
   const loadUserData = () => {
     const email = localStorage.getItem('userEmail') || '';
-    const name = email.split('@')[0] || '';
+    const name = localStorage.getItem('userName') || email.split('@')[0] || '';
     const savedProfilePic = localStorage.getItem('profilePicture');
     setProfile(prev => ({
       ...prev,
@@ -242,8 +244,8 @@ const Profile: React.FC = () => {
               </svg>
             </button>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Account Settings</h1>
-              <p className="text-sm text-gray-500">Manage your profile and preferences</p>
+              <h1 className="text-xl font-bold text-gray-800">{t('accountSettings')}</h1>
+              <p className="text-sm text-gray-500">{t('manageProfile')}</p>
             </div>
           </div>
         </div>
@@ -332,10 +334,10 @@ const Profile: React.FC = () => {
             {activeTab === 'profile' && (
               <form onSubmit={handleSaveProfile} className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Personal Information</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('personalInformation')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('displayName')}</label>
                       <input
                         type="text"
                         name="name"
@@ -346,7 +348,7 @@ const Profile: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('emailAddress')}</label>
                       <input
                         type="email"
                         name="email"
@@ -362,10 +364,10 @@ const Profile: React.FC = () => {
                 <hr className="border-gray-200" />
 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('changePassword')}</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('currentPassword')}</label>
                       <input
                         type="password"
                         name="currentPassword"
@@ -377,7 +379,7 @@ const Profile: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('newPassword')}</label>
                         <input
                           type="password"
                           name="newPassword"
@@ -388,7 +390,7 @@ const Profile: React.FC = () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('confirmPassword')}</label>
                         <input
                           type="password"
                           name="confirmPassword"
@@ -414,10 +416,10 @@ const Profile: React.FC = () => {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        <span>Saving...</span>
+                        <span>{t('saving')}</span>
                       </>
                     ) : (
-                      <span>Save Changes</span>
+                      <span>{t('saveChanges')}</span>
                     )}
                   </button>
                 </div>
@@ -428,7 +430,7 @@ const Profile: React.FC = () => {
             {activeTab === 'preferences' && (
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Notifications</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('notifications')}</h3>
                   <div className="space-y-4">
                     <ToggleOption
                       label="Email Notifications"
@@ -460,16 +462,16 @@ const Profile: React.FC = () => {
                 <hr className="border-gray-200" />
 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Display</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('display')}</h3>
                   <div className="space-y-4">
                     <ToggleOption
-                      label="Dark Mode"
+                      label={t('darkMode')}
                       description="Use dark theme for the dashboard"
                       checked={preferences.darkMode}
                       onChange={(checked) => handlePreferenceChange('darkMode', checked)}
                     />
                     <ToggleOption
-                      label="Compact View"
+                      label={t('compactView')}
                       description="Show more items with smaller spacing"
                       checked={preferences.compactView}
                       onChange={(checked) => handlePreferenceChange('compactView', checked)}
@@ -480,10 +482,10 @@ const Profile: React.FC = () => {
                 <hr className="border-gray-200" />
 
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4">Regional</h3>
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4">{t('regional')}</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('language')}</label>
                       <select
                         value={preferences.language}
                         onChange={(e) => handlePreferenceChange('language', e.target.value)}
@@ -498,7 +500,7 @@ const Profile: React.FC = () => {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Timezone</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('timezone')}</label>
                       <select
                         value={preferences.timezone}
                         onChange={(e) => handlePreferenceChange('timezone', e.target.value)}
@@ -519,7 +521,7 @@ const Profile: React.FC = () => {
                     onClick={handleSavePreferences}
                     className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-medium rounded-lg transition"
                   >
-                    Save Preferences
+                    {t('savePreferences')}
                   </button>
                 </div>
               </div>

@@ -6,6 +6,7 @@ import { activityService, Activity } from '../services/activityService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface MenuItem {
   _id: string;
@@ -89,13 +90,14 @@ const getActivityIcon = (action: string) => {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Get user info from localStorage
   const userEmail = localStorage.getItem('userEmail') || '';
-  const userName = userEmail.split('@')[0] || 'User';
+  const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
@@ -200,8 +202,8 @@ const Dashboard: React.FC = () => {
               </svg>
             </button>
             <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Dashboard Overview</p>
+              <h1 className="text-xl font-bold text-gray-800 dark:text-white">{t('smartMenu')}</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboardOverview')}</p>
             </div>
           </div>
 
@@ -215,7 +217,7 @@ const Dashboard: React.FC = () => {
               </div>
               <input
                 type="text"
-                placeholder="Search menu items..."
+                placeholder={t('searchMenuItems')}
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
             </div>
@@ -252,7 +254,7 @@ const Dashboard: React.FC = () => {
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
                 </svg>
-                <span className="flex-1 text-left">Dashboard</span>
+                <span className="flex-1 text-left">{t('dashboard')}</span>
               </button>
 
               {/* Menu Items */}
@@ -261,7 +263,7 @@ const Dashboard: React.FC = () => {
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <Icon path={mdiSilverwareForkKnife} size={0.8} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
-                <span className="flex-1 text-left">Menu Items</span>
+                <span className="flex-1 text-left">{t('menuItems')}</span>
               </button>
 
               {/* Allergens */}
@@ -270,7 +272,7 @@ const Dashboard: React.FC = () => {
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
-                <span className="flex-1 text-left">Allergens</span>
+                <span className="flex-1 text-left">{t('allergens')}</span>
               </button>
 
               {/* Ingredients */}
@@ -279,7 +281,7 @@ const Dashboard: React.FC = () => {
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
               >
                 <Icon path={mdiLeaf} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
-                <span className="flex-1 text-left">Ingredients</span>
+                <span className="flex-1 text-left">{t('ingredients')}</span>
               </button>
 
               {/* Staff Management */}
@@ -290,7 +292,7 @@ const Dashboard: React.FC = () => {
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                 </svg>
-                <span className="flex-1 text-left">Staff Management</span>
+                <span className="flex-1 text-left">{t('staffManagement')}</span>
               </button>
 
               {/* QR Codes */}
@@ -301,7 +303,7 @@ const Dashboard: React.FC = () => {
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                 </svg>
-                <span className="flex-1 text-left">QR Codes</span>
+                <span className="flex-1 text-left">{t('qrCodes')}</span>
               </button>
             </div>
 
@@ -315,7 +317,7 @@ const Dashboard: React.FC = () => {
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
-                <span className="flex-1 text-left">Reports</span>
+                <span className="flex-1 text-left">{t('reports')}</span>
               </button>
 
               {/* Settings */}
@@ -327,25 +329,25 @@ const Dashboard: React.FC = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                <span className="flex-1 text-left">Settings</span>
+                <span className="flex-1 text-left">{t('settings')}</span>
               </button>
             </div>
           </nav>
 
           {/* Quick Stats Card */}
           <div className="mx-6 mb-4 p-3 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-xl border border-green-200 dark:border-green-800">
-            <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-2">Today's Overview</p>
+            <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-2">{t('todaysOverview')}</p>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700 dark:text-green-400">Total Items</span>
+                <span className="text-xs text-green-700 dark:text-green-400">{t('total')}</span>
                 <span className="text-sm font-bold text-green-900 dark:text-green-200">{totalItems}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700 dark:text-green-400">Active</span>
+                <span className="text-xs text-green-700 dark:text-green-400">{t('active')}</span>
                 <span className="text-sm font-bold text-green-900 dark:text-green-200">{activeItems}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-green-700 dark:text-green-400">Queries</span>
+                <span className="text-xs text-green-700 dark:text-green-400">{t('queries')}</span>
                 <span className="text-sm font-bold text-green-900 dark:text-green-200">{mockQueriesToday}</span>
               </div>
             </div>
@@ -358,10 +360,10 @@ const Dashboard: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-0.5">Need Help?</p>
+                <p className="text-xs font-semibold text-blue-900 dark:text-blue-300 mb-0.5">{t('needHelp')}</p>
                 <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed">Tips for managing your restaurant menu.</p>
                 <button className="mt-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300">
-                  View Guide →
+                  {t('viewGuide')} →
                 </button>
               </div>
             </div>
@@ -404,7 +406,7 @@ const Dashboard: React.FC = () => {
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
-                Welcome back, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
+                {t('welcomeBack')}, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
               </h2>
               <p className="text-gray-600 dark:text-gray-400">{getCurrentDateTime()}</p>
             </div>
@@ -415,7 +417,7 @@ const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Total Menu Items</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('totalMenuItems')}</p>
                     <p className="text-4xl font-bold text-gray-800 dark:text-white">{totalItems}</p>
                   </div>
                   <div className="w-14 h-14 bg-green-100 dark:bg-green-900/50 rounded-xl flex items-center justify-center">
@@ -430,7 +432,7 @@ const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Active Items</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('activeItems')}</p>
                     <p className="text-4xl font-bold text-gray-800 dark:text-white">{activeItems}</p>
                   </div>
                   <div className="w-14 h-14 bg-green-100 dark:bg-green-900/50 rounded-xl flex items-center justify-center">
@@ -445,7 +447,7 @@ const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Queries Today</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('queriesToday')}</p>
                     <p className="text-4xl font-bold text-gray-800 dark:text-white">{mockQueriesToday}</p>
                   </div>
                   <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center">
@@ -460,7 +462,7 @@ const Dashboard: React.FC = () => {
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">Most Viewed</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('mostViewed')}</p>
                     <p className="text-xl font-bold text-gray-800 dark:text-white">{mockMostViewedItem}</p>
                   </div>
                   <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/50 rounded-xl flex items-center justify-center">
@@ -477,9 +479,9 @@ const Dashboard: React.FC = () => {
               {/* Recent Activity - Left Column (2/3 width) */}
               <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">Recent Activity</h3>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('recentActivity')}</h3>
                   <button className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium">
-                    View All
+                    {t('viewAll')}
                   </button>
                 </div>
 
@@ -508,7 +510,7 @@ const Dashboard: React.FC = () => {
 
               {/* Popular This Week - Right Column (1/3 width) */}
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Popular This Week</h3>
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">{t('popularThisWeek')}</h3>
 
                 <div className="space-y-4">
                   {mockPopularItems.map((item, index) => (
@@ -531,53 +533,53 @@ const Dashboard: React.FC = () => {
 
             {/* Quick Actions */}
             <div className="mb-8">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">Quick Actions</h3>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">{t('quickActions')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button 
+                <button
                   onClick={() => navigate('/menu-items/new')}
                   className="bg-green-500 hover:bg-green-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
-                  <span className="font-semibold">Add New Dish</span>
+                  <span className="font-semibold">{t('addNewDish')}</span>
                 </button>
 
-                <button 
+                <button
                   onClick={() => navigate('/allergens')}
                   className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
-                  <span className="font-semibold">Update Allergens</span>
+                  <span className="font-semibold">{t('updateAllergens')}</span>
                 </button>
 
-                <button 
+                <button
                   onClick={() => navigate('/reports')}
                   className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
-                  <span className="font-semibold">View Reports</span>
+                  <span className="font-semibold">{t('viewReports')}</span>
                 </button>
 
-                <button 
+                <button
                   onClick={() => navigate('/staff')}
                   className="bg-purple-500 hover:bg-purple-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
-                  <span className="font-semibold">Manage Staff</span>
+                  <span className="font-semibold">{t('manageStaff')}</span>
                 </button>
               </div>
             </div>
 
             {/* Most Filtered Allergens - Donut Chart */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-8">Most Filtered Allergens</h3>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-8">{t('mostFilteredAllergens')}</h3>
 
               <div className="flex flex-col md:flex-row items-center justify-center gap-12">
                 {/* Donut Chart */}
