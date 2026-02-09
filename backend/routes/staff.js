@@ -13,6 +13,10 @@ const { protect, authorize, checkPermission } = require('../middleware/auth');
 // All routes require authentication
 router.use(protect);
 
+// Accept invitation MUST come before /:id routes - otherwise Express may match
+// POST /accept-invitation to PUT /:id with id="accept-invitation"
+router.post('/accept-invitation', acceptInvitation);
+
 // Get all staff - Owner and Manager can view
 router.get('/', authorize('owner', 'manager'), getStaff);
 
@@ -24,8 +28,5 @@ router.put('/:id', authorize('owner', 'manager'), checkPermission('canManageStaf
 
 // Delete staff - Only Owner can delete
 router.delete('/:id', authorize('owner'), deleteStaff);
-
-// Accept invitation - Any authenticated user
-router.post('/accept-invitation', acceptInvitation);
 
 module.exports = router;

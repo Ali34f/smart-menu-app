@@ -37,6 +37,7 @@ api.interceptors.response.use(
       // Token expired or invalid - redirect to login
       localStorage.removeItem('authToken');
       localStorage.removeItem('userEmail');
+      localStorage.removeItem('userName');
       localStorage.removeItem('restaurantName');
       localStorage.removeItem('userRole');
       localStorage.removeItem('qrCode');

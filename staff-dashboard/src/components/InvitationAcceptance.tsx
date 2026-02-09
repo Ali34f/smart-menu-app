@@ -15,20 +15,27 @@ const InvitationAcceptance: React.FC<InvitationAcceptanceProps> = ({ onAccept })
     try {
       setLoading(true);
       const response = await staffService.acceptInvitation();
-      
+
       if (response.success) {
         success('Invitation accepted successfully!');
         localStorage.setItem('invitationAccepted', 'true');
-        
-        // Wait a moment for the success message, then refresh
+
         setTimeout(() => {
-          // Force page reload to ensure all components update
           window.location.reload();
         }, 1500);
       }
     } catch (error: any) {
       console.error('Error accepting invitation:', error);
-      showError(error.response?.data?.message || 'Failed to accept invitation');
+      const message = error.response?.data?.message || 'Failed to accept invitation';
+
+      // If invitation was already accepted (e.g. stale localStorage), sync and reload
+      if (message.toLowerCase().includes('already accepted')) {
+        localStorage.setItem('invitationAccepted', 'true');
+        window.location.reload();
+        return;
+      }
+
+      showError(message);
       setLoading(false);
     }
   };

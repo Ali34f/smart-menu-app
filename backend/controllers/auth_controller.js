@@ -133,17 +133,9 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Debug: Log invitation status before save
-    console.log('[LOGIN] User:', user.email);
-    console.log('[LOGIN] Role:', user.role);
-    console.log('[LOGIN] invitationAccepted BEFORE save:', user.invitationAccepted);
-
     // Update last login
     user.lastLogin = Date.now();
     await user.save();
-
-    // Debug: Log invitation status after save
-    console.log('[LOGIN] invitationAccepted AFTER save:', user.invitationAccepted);
 
     // Generate JWT token
     const token = user.getSignedJwtToken();
