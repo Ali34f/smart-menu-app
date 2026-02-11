@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import { authService } from '../services/authService';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -7,7 +7,8 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
-import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
+import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import ShieldCheckIcon from '../components/ShieldCheckIcon';
 
 interface Allergen {
   _id?: string;
@@ -29,6 +30,8 @@ interface MenuItem {
 
 const Menu: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAllergensPage = location.pathname === '/allergens';
   const { toasts, removeToast, success, error: showError } = useToast();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<MenuItem[]>([]);
@@ -39,7 +42,6 @@ const Menu: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -49,7 +51,6 @@ const Menu: React.FC = () => {
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
-  // Load profile picture
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
     if (savedPic) {
@@ -57,7 +58,6 @@ const Menu: React.FC = () => {
     }
   }, []);
 
-  // Categories from your data
   const categories = ['All Categories', 'Mains', 'Starters', 'Sides', 'Desserts', 'Drinks'];
   const statuses = ['All Status', 'Active', 'Inactive'];
 
@@ -86,7 +86,6 @@ const Menu: React.FC = () => {
   const filterItems = () => {
     let filtered = [...menuItems];
 
-    // Search filter
     if (searchQuery) {
       filtered = filtered.filter(item =>
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -94,19 +93,17 @@ const Menu: React.FC = () => {
       );
     }
 
-    // Category filter
     if (selectedCategory !== 'All Categories') {
       filtered = filtered.filter(item => item.category === selectedCategory);
     }
 
-    // Status filter
     if (selectedStatus !== 'All Status') {
       const isActive = selectedStatus === 'Active';
       filtered = filtered.filter(item => item.isAvailable === isActive);
     }
 
     setFilteredItems(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   };
 
   const handleToggleAvailability = async (itemId: string) => {
@@ -116,8 +113,6 @@ const Menu: React.FC = () => {
 
       const newStatus = item?.isAvailable ? 'hidden' : 'visible';
       success(`Item is now ${newStatus}`);
-
-      // Refresh the list
       fetchMenuItems();
     } catch (error) {
       console.error('Error toggling availability:', error);
@@ -139,7 +134,6 @@ const Menu: React.FC = () => {
       success(`${itemToDelete.name} deleted`);
       setDeleteModalOpen(false);
       setItemToDelete(null);
-      // Refresh the list
       fetchMenuItems();
     } catch (error) {
       console.error('Error deleting item:', error);
@@ -158,13 +152,11 @@ const Menu: React.FC = () => {
     authService.logout();
   };
 
-  // Pagination
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, endIndex);
 
-  // Allergen icon mapping
   const getAllergenIcon = (allergen: string) => {
     const icons: { [key: string]: string } = {
       'Gluten': '🌾',
@@ -179,11 +171,9 @@ const Menu: React.FC = () => {
     return icons[allergen] || '⚠️';
   };
 
-  // Check if item has specific allergen types
   const hasAllergen = (item: MenuItem, type: string) => {
     if (!item.allergens || item.allergens.length === 0) return false;
     return item.allergens.some(allergen => {
-      // Handle both string and object allergens
       const allergenName = typeof allergen === 'string' ? allergen : allergen.name || '';
       return allergenName.toLowerCase().includes(type.toLowerCase());
     });
@@ -293,9 +283,11 @@ const Menu: React.FC = () => {
               {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
+                className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
+                  isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
               >
-                <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
                 <span className="flex-1 text-left">Allergens</span>
               </button>
 
@@ -671,7 +663,6 @@ const Menu: React.FC = () => {
                         value={itemsPerPage}
                         onChange={(e) => {
                           setCurrentPage(1);
-                          // You can add state for itemsPerPage if you want dynamic page sizes
                         }}
                         className="px-2 py-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg text-sm"
                       >

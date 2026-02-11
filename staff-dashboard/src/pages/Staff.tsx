@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { staffService } from '../services/staffService';
 import ProfileDropdown from '../components/ProfileDropdown';
@@ -7,7 +7,8 @@ import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import Icon from '@mdi/react';
-import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
+import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import ShieldCheckIcon from '../components/ShieldCheckIcon';
 
 interface StaffMember {
   _id: string;
@@ -26,6 +27,8 @@ interface StaffMember {
 
 const Staff: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAllergensPage = location.pathname === '/allergens';
   const { toasts, removeToast, success, error: showError } = useToast();
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +41,7 @@ const Staff: React.FC = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState(0);
-  
-  // Edit form state
+
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
@@ -47,14 +49,12 @@ const Staff: React.FC = () => {
     isActive: true
   });
 
-  // Get user info from localStorage
   const userEmail = localStorage.getItem('userEmail') || '';
-  const userName = userEmail.split('@')[0] || 'User';
+  const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const userRole = localStorage.getItem('userRole') || 'staff';
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
-  
-  // Check if current user is Mohammed Khan (super owner)
+
   const isMohammedKhan = userName.toLowerCase().includes('mohammed') || 
                         userEmail.toLowerCase().includes('mohammed');
   
@@ -62,7 +62,6 @@ const Staff: React.FC = () => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
-  // Invite form state
   const [inviteForm, setInviteForm] = useState({
     name: '',
     email: '',
@@ -70,7 +69,6 @@ const Staff: React.FC = () => {
     role: 'staff' as 'manager' | 'staff'
   });
 
-  // Load profile picture
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
     if (savedPic) {
@@ -147,7 +145,6 @@ const Staff: React.FC = () => {
   };
 
   const handleEditStaff = (staff: StaffMember) => {
-    // Don't allow editing owners
     if (staff.role === 'owner') {
       showError('Cannot edit owner account');
       return;
@@ -235,7 +232,6 @@ const Staff: React.FC = () => {
     staff.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Calculate statistics
   const totalStaff = staffMembers.length;
   const activeMembers = staffMembers.filter(s => s.isActive).length;
   const managers = staffMembers.filter(s => s.role === 'manager' || s.role === 'owner').length;
@@ -349,9 +345,11 @@ const Staff: React.FC = () => {
               {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
+                className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
+                  isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
               >
-                <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
                 <span className="flex-1 text-left">Allergens</span>
               </button>
 
@@ -532,15 +530,12 @@ const Staff: React.FC = () => {
                                 {isMohammedKhan && (
                                   <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm">
                                     {(() => {
-                                      // If it's Mohammed Khan himself
                                       if (staff.name.toLowerCase().includes('mohammed')) {
                                         return 'All Restaurants';
                                       }
-                                      // If restaurantId is populated as an object
                                       if (typeof staff.restaurantId === 'object' && staff.restaurantId !== null && staff.restaurantId.name) {
                                         return staff.restaurantId.name;
                                       }
-                                      // Fallback to current restaurant name if viewing from a restaurant context
                                       return restaurantName;
                                     })()}
                                   </td>

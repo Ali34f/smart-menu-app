@@ -9,7 +9,6 @@ export interface Activity {
 }
 
 export const activityService = {
-  // Get recent activities
   getActivities: async (limit: number = 10): Promise<Activity[]> => {
     const response = await api.get(`/activity?limit=${limit}`);
     return response.data.data;

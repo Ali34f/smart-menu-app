@@ -224,8 +224,8 @@ const Register: React.FC = () => {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Side - Fixed Restaurant Image (NO SCROLL) */}
-      <div className="hidden lg:flex lg:w-2/5 fixed inset-y-0 left-0 bg-gray-900">
+      {/* Left Side - Restaurant Image (matches Login exactly) */}
+      <div className="hidden lg:flex lg:w-1/2 relative bg-gray-900">
         <div 
           className="absolute inset-0 bg-cover bg-center"
           style={{
@@ -235,34 +235,30 @@ const Register: React.FC = () => {
         >
           <div className="absolute inset-0 bg-gradient-to-br from-green-900/90 to-gray-900/90"></div>
         </div>
-        
+
         <div className="relative z-10 flex flex-col justify-center items-center w-full px-12 text-white">
-          {/* Logo - matches your design exactly */}
-          <div className="mb-6">
-            <div className="w-32 h-32 bg-green-500 rounded-full flex items-center justify-center shadow-2xl">
-              <svg className="w-20 h-20 text-white" fill="currentColor" viewBox="0 0 24 24">
+          {/* Logo */}
+          <div className="mb-8">
+            <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center">
+              <svg className="w-14 h-14 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
               </svg>
             </div>
           </div>
 
-          {/* Branding Text */}
-          <h1 className="text-5xl font-bold mb-3">Smart Menu</h1>
-          <p className="text-xl mb-2 text-gray-200">Multi-Restaurant Management Platform</p>
-          <p className="text-green-300 text-center max-w-md">
-            Manage your restaurant with confidence
-          </p>
+          {/* Branding */}
+          <h1 className="text-5xl font-bold mb-4">Smart Menu</h1>
+          <p className="text-xl mb-2">Multi-Restaurant Management Platform</p>
+          <p className="text-green-300 text-lg">Manage your restaurant with confidence</p>
         </div>
       </div>
 
-      {/* Right Side - Scrollable Form (offset by left panel width) */}
-      <div className="w-full lg:w-3/5 lg:ml-[40%] min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div
-          id="right-panel"
-          className="w-full h-screen overflow-y-auto"
-        >
-          <div className="flex items-start justify-center p-6 lg:p-8">
-            <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 lg:p-12 my-8">
+      {/* Right Side - Form (matches Login structure) */}
+      <div
+        id="right-panel"
+        className="w-full lg:w-1/2 flex items-center justify-center p-6 lg:p-8 bg-white dark:bg-gray-900 overflow-y-auto min-h-screen"
+      >
+        <div className="w-full max-w-lg">
 
               {/* Mobile Logo */}
               <div className="lg:hidden text-center mb-6">
@@ -274,9 +270,9 @@ const Register: React.FC = () => {
                 <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Smart Menu</h2>
               </div>
 
-              {/* Header - matches your design */}
-              <div className="text-center mb-8">
-                <h2 className="text-3xl lg:text-4xl font-bold text-gray-800 dark:text-white mb-2">
+              {/* Header */}
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
                   Create Restaurant Account
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400">
@@ -430,9 +426,9 @@ const Register: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* City and Postcode (2 columns) */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
+                      {/* City and Postcode - aligned side by side on larger screens */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                        <div className="min-w-0">
                           <label htmlFor="city" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             City / Town
                           </label>
@@ -447,8 +443,7 @@ const Register: React.FC = () => {
                             className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
                           />
                         </div>
-
-                        <div>
+                        <div className="min-w-0">
                           <label htmlFor="postcode" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Postcode
                           </label>
@@ -700,7 +695,7 @@ const Register: React.FC = () => {
               </div>
 
               {/* Footer */}
-              <div className="mt-8 text-center border-t border-gray-200 dark:border-gray-700 pt-6">
+              <div className="mt-8 text-center">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Smart Menu © 2025
                 </p>
@@ -713,8 +708,6 @@ const Register: React.FC = () => {
                   </button>
                 </div>
               </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
