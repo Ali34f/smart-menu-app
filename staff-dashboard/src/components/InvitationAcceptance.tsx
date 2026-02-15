@@ -28,7 +28,6 @@ const InvitationAcceptance: React.FC<InvitationAcceptanceProps> = ({ onAccept })
       console.error('Error accepting invitation:', error);
       const message = error.response?.data?.message || 'Failed to accept invitation';
 
-      // If invitation was already accepted (e.g. stale localStorage), sync and reload
       if (message.toLowerCase().includes('already accepted')) {
         localStorage.setItem('invitationAccepted', 'true');
         window.location.reload();

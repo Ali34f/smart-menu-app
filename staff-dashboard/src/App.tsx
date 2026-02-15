@@ -11,6 +11,8 @@ import EditMenuItem from './pages/EditMenuItem';
 import Profile from './pages/Profile';
 import Staff from './pages/Staff';
 import Ingredients from './pages/Ingredients';
+import Allergens from './pages/Allergens';
+import AllergenComplianceReport from './pages/AllergenComplianceReport';
 import AddIngredient from './pages/AddIngredient';
 import ViewIngredient from './pages/ViewIngredient';
 import EditIngredient from './pages/EditIngredient';
@@ -18,19 +20,16 @@ import InvitationAcceptance from './components/InvitationAcceptance';
 import './App.css';
 
 function App() {
-  // Apply saved preferences on app load
   useEffect(() => {
     const savedPrefs = localStorage.getItem('userPreferences');
     if (savedPrefs) {
       try {
         const prefs = JSON.parse(savedPrefs);
-        // Apply dark mode
         if (prefs.darkMode) {
           document.documentElement.classList.add('dark');
         } else {
           document.documentElement.classList.remove('dark');
         }
-        // Apply language
         if (prefs.language) {
           document.documentElement.lang = prefs.language;
         }
@@ -40,36 +39,25 @@ function App() {
     }
   }, []);
 
-  // Check if user is authenticated
   const isAuthenticated = (): boolean => {
     return localStorage.getItem('authToken') !== null;
   };
 
-  // Protected Route Wrapper Component
   const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (!isAuthenticated()) {
       return <Navigate to="/login" replace />;
     }
 
-    // Check invitation status synchronously (owners are always accepted)
     const userRole = localStorage.getItem('userRole');
     const invitationStatus = localStorage.getItem('invitationAccepted');
-
-    // Block access if invitation not accepted (except for owners)
-    // invitationStatus 'false' = invited staff/manager who hasn't accepted yet
-    // invitationStatus null = stale session; require non-owners to accept
+    // Owners skip; staff/manager must have accepted invite (invitationStatus === 'true')
     const needsToAccept =
       userRole !== 'owner' && invitationStatus !== 'true';
 
     if (needsToAccept) {
       return (
         <>
-          <InvitationAcceptance
-            onAccept={() => {
-              // This will be handled by the component itself
-            }}
-          />
-          {/* Block all interactions with the app */}
+          <InvitationAcceptance onAccept={() => {}} />
           <div className="pointer-events-none opacity-30 select-none">
             {children}
           </div>
@@ -148,6 +136,24 @@ function App() {
           element={
             <ProtectedRoute>
               <Staff />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/allergens"
+          element={
+            <ProtectedRoute>
+              <Allergens />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/allergens/compliance"
+          element={
+            <ProtectedRoute>
+              <AllergenComplianceReport />
             </ProtectedRoute>
           }
         />

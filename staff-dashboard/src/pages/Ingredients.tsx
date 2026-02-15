@@ -7,7 +7,8 @@ import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
-import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
+import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface AllergenRef {
@@ -63,6 +64,7 @@ const Ingredients: React.FC = () => {
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const isIngredientsPage = location.pathname === '/ingredients';
+  const isAllergensPage = location.pathname === '/allergens';
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -271,9 +273,11 @@ const Ingredients: React.FC = () => {
 
                 <button
                   onClick={() => navigate('/allergens')}
-                  className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
+                  className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
+                    isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
                 >
-                  <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                  <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
                   <span className="flex-1 text-left">{t('allergens')}</span>
                 </button>
 

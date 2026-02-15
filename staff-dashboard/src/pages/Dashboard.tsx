@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
 import { activityService, Activity } from '../services/activityService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import Icon from '@mdi/react';
-import { mdiSilverwareForkKnife, mdiLeaf, mdiShield } from '@mdi/js';
+import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface MenuItem {
@@ -18,7 +19,6 @@ interface MenuItem {
 }
 
 
-// Helper function to get activity icon based on action type
 const getActivityIcon = (action: string) => {
   const iconConfig: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
     'menu_item_created': {
@@ -90,18 +90,18 @@ const getActivityIcon = (action: string) => {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAllergensPage = location.pathname === '/allergens';
   const { t } = useLanguage();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Get user info from localStorage
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
-  // Load profile picture
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
     if (savedPic) {
@@ -109,7 +109,6 @@ const Dashboard: React.FC = () => {
     }
   }, []);
 
-  // Get current date/time
   const getCurrentDateTime = () => {
     const now = new Date();
     const options: Intl.DateTimeFormatOptions = { 
@@ -129,7 +128,6 @@ const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch real menu data and activities from backend
       const [menuData, activities] = await Promise.all([
         menuService.getAllItems(),
         activityService.getActivities(5)
@@ -147,16 +145,12 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Calculate real stats from menu data
   const totalItems = menuItems.length;
   const activeItems = menuItems.filter(item => item.isAvailable).length;
 
-  // TODO: Replace with real analytics data from backend
   const mockQueriesToday = 23;
   const mockMostViewedItem = 'Chicken Tikka';
 
-
-  // TODO: Replace with real popularity data from backend
   const mockPopularItems = [
     { name: 'Chicken Tikka', views: 360 },
     { name: 'Lamb Biryani', views: 310 },
@@ -165,7 +159,6 @@ const Dashboard: React.FC = () => {
     { name: 'Butter Chicken', views: 210 }
   ];
 
-  // TODO: Replace with real allergen filter analytics from backend
   const mockAllergenData = [
     { name: 'Gluten', percentage: 35, color: '#EF4444' },
     { name: 'Dairy', percentage: 25, color: '#F59E0B' },
@@ -269,9 +262,11 @@ const Dashboard: React.FC = () => {
               {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
+                className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
+                  isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
               >
-                <Icon path={mdiShield} size={1} className="text-gray-700 dark:text-gray-300 flex-shrink-0" />
+                <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
                 <span className="flex-1 text-left">{t('allergens')}</span>
               </button>
 

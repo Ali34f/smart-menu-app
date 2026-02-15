@@ -13,15 +13,12 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  
-  // Get user role from localStorage
   const userRole = localStorage.getItem('userRole') || 'staff';
-  
+
   const getRoleLabel = (role: string) => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
-  // Load profile picture from localStorage
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
     if (savedPic) {
@@ -29,7 +26,6 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
     }
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -41,7 +37,6 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdown on escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {

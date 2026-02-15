@@ -72,7 +72,9 @@ const userSchema = new mongoose.Schema({
   invitationAccepted: {
     type: Boolean,
     default: true // Owners and directly registered users have it true by default
-  }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpire: Date
 }, {
   timestamps: true
 });
