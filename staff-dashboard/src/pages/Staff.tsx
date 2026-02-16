@@ -61,6 +61,7 @@ const Staff: React.FC = () => {
   const getRoleLabel = (role: string) => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
+  const canManageStaff = userRole === 'owner' || userRole === 'manager' || isMohammedKhan;
 
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -452,15 +453,17 @@ const Staff: React.FC = () => {
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Staff Management</h2>
                 <p className="text-gray-600 dark:text-gray-400">Manage your restaurant team members</p>
               </div>
-              <button
-                onClick={() => setIsInviteModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                <span>Invite New Staff</span>
-              </button>
+              {canManageStaff && (
+                <button
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                  <span>Invite New Staff</span>
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -497,13 +500,15 @@ const Staff: React.FC = () => {
                           <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Role</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Status</th>
                           <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Last Login</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                          {canManageStaff && (
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {filteredStaff.length === 0 ? (
                           <tr>
-                            <td colSpan={isMohammedKhan ? 7 : 6} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <td colSpan={isMohammedKhan ? (canManageStaff ? 7 : 6) : (canManageStaff ? 6 : 5)} className="text-center py-8 text-gray-500 dark:text-gray-400">
                               No staff members found
                             </td>
                           </tr>
@@ -552,32 +557,34 @@ const Staff: React.FC = () => {
                                   </div>
                                 </td>
                                 <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm">{formatLastLogin(staff.lastLogin)}</td>
-                                <td className="py-4 px-4">
-                                  <div className="flex items-center space-x-2">
-                                    <button
-                                      onClick={() => handleEditStaff(staff)}
-                                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                                      title="Edit"
-                                    >
-                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      onClick={() => {
-                                        setSelectedStaff(staff);
-                                        setIsDeleteModalOpen(true);
-                                      }}
-                                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                      title="Delete"
-                                      disabled={staff.role === 'owner' && staff.name.toLowerCase().includes('mohammed')}
-                                    >
-                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                </td>
+                                {canManageStaff && (
+                                  <td className="py-4 px-4">
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => handleEditStaff(staff)}
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                        title="Edit"
+                                      >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setSelectedStaff(staff);
+                                          setIsDeleteModalOpen(true);
+                                        }}
+                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                        title="Delete"
+                                        disabled={staff.role === 'owner' && staff.name.toLowerCase().includes('mohammed')}
+                                      >
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </td>
+                                )}
                               </tr>
                           ))
                         )}

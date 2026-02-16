@@ -17,8 +17,8 @@ router.use(protect);
 // POST /accept-invitation to PUT /:id with id="accept-invitation"
 router.post('/accept-invitation', acceptInvitation);
 
-// Get all staff - Owner and Manager can view
-router.get('/', authorize('owner', 'manager'), getStaff);
+// Get all staff - all authenticated roles can view
+router.get('/', authorize('owner', 'manager', 'staff'), getStaff);
 
 // Add staff - Owner and Manager can add
 router.post('/', authorize('owner', 'manager'), checkPermission('canManageStaff'), addStaff);

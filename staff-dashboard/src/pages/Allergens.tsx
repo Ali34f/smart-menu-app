@@ -5,6 +5,7 @@ import { menuService } from '../services/menuService';
 import { activityService } from '../services/activityService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
+import { AllergenDetail, getAllergenDetail } from '../data/allergenDetails';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -49,10 +50,12 @@ const Allergens: React.FC = () => {
   const [activities, setActivities] = useState<{ id: string; action: string; text: string; time: string; user: string }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [selectedAllergen, setSelectedAllergen] = useState<AllergenDetail | null>(null);
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const isAllergensPage = location.pathname === '/allergens';
@@ -61,6 +64,22 @@ const Allergens: React.FC = () => {
     const savedPic = localStorage.getItem('profilePicture');
     if (savedPic) setProfilePicture(savedPic);
   }, []);
+
+  useEffect(() => {
+    if (!selectedAllergen) return undefined;
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedAllergen(null);
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = '';
+    };
+  }, [selectedAllergen]);
 
   useEffect(() => {
     const load = async () => {
@@ -137,6 +156,8 @@ const Allergens: React.FC = () => {
     if (!iconKey) return '⚠️';
     return ALLERGEN_ICON_MAP[iconKey.toLowerCase()] ?? '⚠️';
   };
+
+  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -283,7 +304,7 @@ const Allergens: React.FC = () => {
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">{userName}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayRole}</p>
                 </div>
               </div>
               <button
@@ -354,6 +375,7 @@ const Allergens: React.FC = () => {
                               </p>
                               <button
                                 type="button"
+                                onClick={() => setSelectedAllergen(getAllergenDetail(a.name, a.description))}
                                 className="mt-2 text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
                               >
                                 Learn More
@@ -503,6 +525,101 @@ const Allergens: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {selectedAllergen && (
+        <div className="fixed inset-0 z-40">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSelectedAllergen(null)}
+          />
+
+          <aside className="absolute right-0 top-0 h-full w-full max-w-xl bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto">
+            <div className="sticky top-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur border-b border-gray-200 dark:border-gray-700 p-5 flex items-start justify-between">
+              <div className="pr-4">
+                <p className="text-xs uppercase tracking-wide text-green-600 dark:text-green-400 font-semibold">
+                  Allergen guidance
+                </p>
+                <h3 className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
+                  {selectedAllergen.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedAllergen(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white transition"
+                aria-label="Close allergen details"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <section>
+                <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                  Overview
+                </h4>
+                <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                  {selectedAllergen.description}
+                </p>
+              </section>
+
+              <section>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-white mb-2">Common Sources</h4>
+                <ul className="space-y-2 list-disc pl-5 text-gray-700 dark:text-gray-300">
+                  {selectedAllergen.commonSources.map((source) => (
+                    <li key={source}>{source}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-4">
+                <h4 className="text-base font-semibold text-amber-700 dark:text-amber-300 mb-2">
+                  Hidden Sources (Watch Out)
+                </h4>
+                <ul className="space-y-2 list-disc pl-5 text-amber-800 dark:text-amber-200">
+                  {selectedAllergen.hiddenSources.map((source) => (
+                    <li key={source}>{source}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-white mb-2">Cross-Contamination Risks</h4>
+                <ul className="space-y-2 list-disc pl-5 text-gray-700 dark:text-gray-300">
+                  {selectedAllergen.crossContaminationRisks.map((risk) => (
+                    <li key={risk}>{risk}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-white mb-2">Symptoms to Monitor</h4>
+                <ul className="space-y-2 list-disc pl-5 text-gray-700 dark:text-gray-300">
+                  {selectedAllergen.symptoms.map((symptom) => (
+                    <li key={symptom}>{symptom}</li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 p-4">
+                <h4 className="text-base font-semibold text-green-700 dark:text-green-300 mb-2">Kitchen Safety Tips</h4>
+                <ul className="space-y-2 list-disc pl-5 text-green-800 dark:text-green-200">
+                  <li>Use separate preparation areas and utensils for allergen-sensitive orders.</li>
+                  <li>Label storage containers clearly and update prep sheets every shift.</li>
+                  <li>Sanitize surfaces, tools, and gloves before switching tasks.</li>
+                </ul>
+              </section>
+
+              <section>
+                <h4 className="text-base font-semibold text-gray-800 dark:text-white mb-2">UK Regulation</h4>
+                <p className="text-gray-700 dark:text-gray-300">{selectedAllergen.ukRegulation}</p>
+              </section>
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 };

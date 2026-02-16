@@ -100,7 +100,9 @@ const Dashboard: React.FC = () => {
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [showAllActivity, setShowAllActivity] = useState(false);
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -130,7 +132,7 @@ const Dashboard: React.FC = () => {
     try {
       const [menuData, activities] = await Promise.all([
         menuService.getAllItems(),
-        activityService.getActivities(5)
+        activityService.getActivities(50)
       ]);
       setMenuItems(menuData.data || []);
       setRecentActivity(activities || []);
@@ -169,6 +171,9 @@ const Dashboard: React.FC = () => {
   const handleLogout = () => {
     authService.logout();
   };
+
+  const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
+  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
   if (loading) {
     return (
@@ -379,7 +384,7 @@ const Dashboard: React.FC = () => {
                   <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">
                     {userName}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayRole}</p>
                 </div>
               </div>
               <button
@@ -475,14 +480,19 @@ const Dashboard: React.FC = () => {
               <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('recentActivity')}</h3>
-                  <button className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium">
-                    {t('viewAll')}
-                  </button>
+                  {recentActivity.length > 5 && (
+                    <button
+                      onClick={() => setShowAllActivity((prev) => !prev)}
+                      className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 text-sm font-medium"
+                    >
+                      {showAllActivity ? 'Show less' : t('viewAll')}
+                    </button>
+                  )}
                 </div>
 
                 <div className="space-y-4">
-                  {recentActivity.length > 0 ? (
-                    recentActivity.map((activity) => {
+                  {displayedActivity.length > 0 ? (
+                    displayedActivity.map((activity) => {
                       const iconStyle = getActivityIcon(activity.action);
                       return (
                         <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0">

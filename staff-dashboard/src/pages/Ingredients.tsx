@@ -61,6 +61,7 @@ const Ingredients: React.FC = () => {
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const isIngredientsPage = location.pathname === '/ingredients';
@@ -139,6 +140,8 @@ const Ingredients: React.FC = () => {
   const getAllergenColor = (name: string) => {
     return ALLERGEN_COLORS[name] || 'bg-gray-500';
   };
+
+  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
   const getIngredientName = (a: AllergenRef | string) =>
     typeof a === 'string' ? a : a.name;
@@ -348,7 +351,7 @@ const Ingredients: React.FC = () => {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">{userName}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayRole}</p>
                   </div>
                 </div>
                 <button

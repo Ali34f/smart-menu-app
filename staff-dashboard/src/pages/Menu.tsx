@@ -49,6 +49,7 @@ const Menu: React.FC = () => {
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
+  const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   useEffect(() => {
@@ -157,26 +158,24 @@ const Menu: React.FC = () => {
   const endIndex = startIndex + itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, endIndex);
 
-  const getAllergenIcon = (allergen: string) => {
-    const icons: { [key: string]: string } = {
-      'Gluten': '🌾',
-      'Dairy': '🥛',
-      'Nuts': '🥜',
-      'Eggs': '🥚',
-      'Fish': '🐟',
-      'Shellfish': '🦐',
-      'Soy': '🫘',
-      'Sesame': '🌰'
-    };
-    return icons[allergen] || '⚠️';
-  };
-
   const hasAllergen = (item: MenuItem, type: string) => {
     if (!item.allergens || item.allergens.length === 0) return false;
     return item.allergens.some(allergen => {
       const allergenName = typeof allergen === 'string' ? allergen : allergen.name || '';
       return allergenName.toLowerCase().includes(type.toLowerCase());
     });
+  };
+
+  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+
+  const getCategoryBadgeClasses = (category: string) => {
+    const normalized = category.toLowerCase();
+    if (normalized.includes('starter')) return 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300';
+    if (normalized.includes('main')) return 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300';
+    if (normalized.includes('dessert')) return 'bg-pink-100 dark:bg-pink-900/50 text-pink-800 dark:text-pink-300';
+    if (normalized.includes('drink')) return 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300';
+    if (normalized.includes('side')) return 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300';
+    return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
   };
 
   if (loading) {
@@ -365,7 +364,7 @@ const Menu: React.FC = () => {
                   <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">
                     {userName}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Staff</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{displayRole}</p>
                 </div>
               </div>
               <button
@@ -525,7 +524,7 @@ const Menu: React.FC = () => {
 
                         {/* Category */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
+                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getCategoryBadgeClasses(item.category)}`}>
                             {item.category}
                           </span>
                         </td>

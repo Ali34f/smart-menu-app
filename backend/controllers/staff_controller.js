@@ -3,7 +3,7 @@ const Restaurant = require('../models/Restaurant');
 
 // @desc    Get all staff for restaurant
 // @route   GET /api/staff
-// @access  Private (Owner, Manager)
+// @access  Private (Owner, Manager, Staff)
 exports.getStaff = async (req, res, next) => {
   try {
     // Check if the logged-in user is Mohammed Khan (super owner)
