@@ -25,6 +25,8 @@ interface StaffMember {
   } | string;
 }
 
+type ColumnKey = 'member' | 'email' | 'restaurant' | 'role' | 'status' | 'lastLogin' | 'actions';
+
 const Staff: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,6 +43,18 @@ const Staff: React.FC = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState(0);
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>({
+    member: 220,
+    email: 260,
+    restaurant: 180,
+    role: 120,
+    status: 120,
+    lastLogin: 140,
+    actions: 120
+  });
+  const [resizingColumn, setResizingColumn] = useState<ColumnKey | null>(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -81,6 +95,37 @@ const Staff: React.FC = () => {
     fetchStaffMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - startX;
+      const nextWidth = Math.max(100, startWidth + delta);
+      setColumnWidths((prev) => ({
+        ...prev,
+        [resizingColumn]: nextWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizingColumn, startWidth, startX]);
 
   const fetchStaffMembers = async () => {
     try {
@@ -226,6 +271,13 @@ const Staff: React.FC = () => {
     ];
     const index = name.charCodeAt(0) % colors.length;
     return colors[index];
+  };
+
+  const startColumnResize = (column: ColumnKey, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setResizingColumn(column);
+    setStartX(e.clientX);
+    setStartWidth(columnWidths[column]);
   };
 
   const filteredStaff = staffMembers.filter(staff =>
@@ -489,19 +541,84 @@ const Staff: React.FC = () => {
 
                   {/* Table */}
                   <div className="overflow-x-auto">
-                    <table className="w-full">
+                    <table className="w-full table-fixed min-w-[960px]">
+                      <colgroup>
+                        <col style={{ width: `${columnWidths.member}px` }} />
+                        <col style={{ width: `${columnWidths.email}px` }} />
+                        {isMohammedKhan && <col style={{ width: `${columnWidths.restaurant}px` }} />}
+                        <col style={{ width: `${columnWidths.role}px` }} />
+                        <col style={{ width: `${columnWidths.status}px` }} />
+                        <col style={{ width: `${columnWidths.lastLogin}px` }} />
+                        {canManageStaff && <col style={{ width: `${columnWidths.actions}px` }} />}
+                      </colgroup>
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Member</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Email</th>
+                          <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Member
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('member', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize Member column"
+                            />
+                          </th>
+                          <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Email
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('email', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize Email column"
+                            />
+                          </th>
                           {isMohammedKhan && (
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Restaurant</th>
+                            <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                              Restaurant
+                              <button
+                                type="button"
+                                onMouseDown={(e) => startColumnResize('restaurant', e)}
+                                className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                                aria-label="Resize Restaurant column"
+                              />
+                            </th>
                           )}
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Role</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Status</th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Last Login</th>
+                          <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Role
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('role', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize Role column"
+                            />
+                          </th>
+                          <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Status
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('status', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize Status column"
+                            />
+                          </th>
+                          <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            Last Login
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('lastLogin', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize Last Login column"
+                            />
+                          </th>
                           {canManageStaff && (
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">Actions</th>
+                            <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                              Actions
+                              <button
+                                type="button"
+                                onMouseDown={(e) => startColumnResize('actions', e)}
+                                className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                                aria-label="Resize Actions column"
+                              />
+                            </th>
                           )}
                         </tr>
                       </thead>
@@ -516,7 +633,7 @@ const Staff: React.FC = () => {
                           filteredStaff.map((staff) => (
                               <tr key={staff._id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <td className="py-4 px-4">
-                                  <div className="flex items-center space-x-3">
+                                  <div className="flex items-center space-x-3 min-w-0">
                                     {staff.profilePicture ? (
                                       <img
                                         src={staff.profilePicture}
@@ -528,12 +645,12 @@ const Staff: React.FC = () => {
                                         {staff.name.charAt(0).toUpperCase()}
                                       </div>
                                     )}
-                                    <span className="font-medium text-gray-800 dark:text-white">{staff.name}</span>
+                                    <span className="font-medium text-gray-800 dark:text-white truncate">{staff.name}</span>
                                   </div>
                                 </td>
-                                <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm">{staff.email}</td>
+                                <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm truncate">{staff.email}</td>
                                 {isMohammedKhan && (
-                                  <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm">
+                                  <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm truncate">
                                     {(() => {
                                       if (staff.name.toLowerCase().includes('mohammed')) {
                                         return 'All Restaurants';

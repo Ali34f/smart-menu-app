@@ -87,64 +87,92 @@ const AddIngredient: React.FC = () => {
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-2xl mx-auto px-6 py-4">
+          <div className="max-w-4xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-              <button
-                onClick={() => navigate('/ingredients')}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
-              >
-                <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => navigate('/ingredients')}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-600 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Add Ingredient</h1>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Create a new ingredient for your inventory</p>
+                </div>
+              </div>
+              <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center">
+                <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
                 </svg>
-              </button>
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Add New Ingredient</h1>
-              <div className="w-9" />
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="max-w-2xl mx-auto px-6 py-8">
-          <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Ingredient Name *</label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500"
-                placeholder="e.g. Chicken Breast"
-              />
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-medium text-gray-900 dark:text-white mb-4">Basic Information</h2>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Ingredient Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="e.g. Chicken Breast"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
+                  <select
+                    name="category"
+                    value={formData.category}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    {INGREDIENT_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Category</label>
-              <select
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500"
-              >
-                {INGREDIENT_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Allergen Information</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Select all allergens present in this ingredient</p>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Contains Allergens</label>
               {allergensLoading ? (
-                <p className="text-sm text-gray-500">Loading allergens...</p>
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
+                </div>
               ) : (
-                <div className="flex flex-wrap gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                   {availableAllergens.map((a) => (
-                    <label key={a._id} className="flex items-center space-x-2 cursor-pointer">
+                    <label
+                      key={a._id}
+                      className={`flex items-center space-x-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${
+                        formData.allergens.includes(a._id)
+                          ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                      }`}
+                    >
                       <input
                         type="checkbox"
                         checked={formData.allergens.includes(a._id)}
                         onChange={() => handleCheckboxChange(a._id)}
-                        className="rounded border-gray-300"
+                        className="w-4 h-4 text-green-600 rounded focus:ring-green-500 border-gray-300"
                       />
                       <span className="text-sm text-gray-700 dark:text-gray-300">{a.name}</span>
                     </label>
@@ -153,30 +181,31 @@ const AddIngredient: React.FC = () => {
               )}
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Notes (optional)</label>
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-base font-medium text-gray-900 dark:text-white mb-1">Notes</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Optional internal notes for staff</p>
               <textarea
                 name="notes"
                 value={formData.notes}
                 onChange={handleInputChange}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500"
-                placeholder="Additional notes..."
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                placeholder="Storage notes, prep tips, supplier notes..."
               />
             </div>
 
-            <div className="flex justify-end space-x-3 pt-4">
+            <div className="flex items-center justify-end space-x-3 pt-2">
               <button
                 type="button"
                 onClick={() => navigate('/ingredients')}
-                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium disabled:opacity-50"
+                className="px-6 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Adding...' : 'Add Ingredient'}
               </button>

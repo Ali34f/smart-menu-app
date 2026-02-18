@@ -12,6 +12,7 @@ import Profile from './pages/Profile';
 import Staff from './pages/Staff';
 import Ingredients from './pages/Ingredients';
 import Allergens from './pages/Allergens';
+import QRCodes from './pages/QRCodes';
 import AllergenComplianceReport from './pages/AllergenComplianceReport';
 import AddIngredient from './pages/AddIngredient';
 import ViewIngredient from './pages/ViewIngredient';
@@ -154,6 +155,15 @@ function App() {
           element={
             <ProtectedRoute>
               <AllergenComplianceReport />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/qr-codes"
+          element={
+            <ProtectedRoute>
+              <QRCodes />
             </ProtectedRoute>
           }
         />
