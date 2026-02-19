@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
 import { staffService } from '../services/staffService';
 import ProfileDropdown from '../components/ProfileDropdown';
@@ -9,6 +10,7 @@ import { useToast } from '../hooks/useToast';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
+import NotificationBell from '../components/NotificationBell';
 
 interface StaffMember {
   _id: string;
@@ -31,7 +33,7 @@ const Staff: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAllergensPage = location.pathname === '/allergens';
-  const { toasts, removeToast, success, error: showError } = useToast();
+  const { toasts, removeToast, error: showError } = useToast();
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -160,7 +162,7 @@ const Staff: React.FC = () => {
     try {
       setInviteLoading(true);
       await staffService.addStaff(inviteForm);
-      success('Staff member invited successfully');
+      toast.success('Staff member invited successfully');
       setIsInviteModalOpen(false);
       setInviteForm({ name: '', email: '', password: '', role: 'staff' });
       fetchStaffMembers();
@@ -178,7 +180,7 @@ const Staff: React.FC = () => {
     try {
       setDeleteLoading(true);
       await staffService.deleteStaff(selectedStaff._id);
-      success('Staff member removed successfully');
+      toast.success('Staff member removed successfully');
       setIsDeleteModalOpen(false);
       setSelectedStaff(null);
       fetchStaffMembers();
@@ -212,7 +214,7 @@ const Staff: React.FC = () => {
     try {
       setEditLoading(true);
       await staffService.updateStaff(selectedStaff._id, editForm);
-      success('Staff member updated successfully');
+      toast.success('Staff member updated successfully');
       setIsEditModalOpen(false);
       setSelectedStaff(null);
       fetchStaffMembers();
@@ -352,12 +354,7 @@ const Staff: React.FC = () => {
           {/* Actions and Profile */}
           <div className="flex items-center space-x-4">
             {/* Notifications */}
-            <button className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center">3</span>
-            </button>
+            <NotificationBell />
 
             {/* Profile Dropdown */}
             <ProfileDropdown

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -72,6 +73,16 @@ function App() {
   return (
     <LanguageProvider>
       <Router>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 2500,
+            style: {
+              borderRadius: '10px',
+              border: '1px solid #d1fae5'
+            }
+          }}
+        />
         <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { menuService } from '../services/menuService';
 import { authService } from '../services/authService';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 import ProfileDropdown from '../components/ProfileDropdown';
+import NotificationBell from '../components/NotificationBell';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
@@ -32,7 +34,7 @@ const Menu: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const isAllergensPage = location.pathname === '/allergens';
-  const { toasts, removeToast, success, error: showError } = useToast();
+  const { toasts, removeToast, error: showError } = useToast();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,7 +115,7 @@ const Menu: React.FC = () => {
       await menuService.toggleAvailability(itemId);
 
       const newStatus = item?.isAvailable ? 'hidden' : 'visible';
-      success(`Item is now ${newStatus}`);
+      toast.success(`Item is now ${newStatus}`);
       fetchMenuItems();
     } catch (error) {
       console.error('Error toggling availability:', error);
@@ -132,7 +134,7 @@ const Menu: React.FC = () => {
     setDeleteLoading(true);
     try {
       await menuService.deleteItem(itemToDelete.id);
-      success(`${itemToDelete.name} deleted`);
+      toast.success(`${itemToDelete.name} deleted`);
       setDeleteModalOpen(false);
       setItemToDelete(null);
       fetchMenuItems();
@@ -239,12 +241,7 @@ const Menu: React.FC = () => {
 
           {/* Notifications and Profile */}
           <div className="flex items-center space-x-4">
-            <button className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            <NotificationBell />
 
             {/* Profile Dropdown */}
             <ProfileDropdown
@@ -385,7 +382,10 @@ const Menu: React.FC = () => {
           <div className="p-8">
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Menu Items</h2>
+              <div>
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Menu Items</h2>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage your dishes, allergens, and availability</p>
+              </div>
               <button 
                 onClick={() => navigate('/menu-items/new')}
                 className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
