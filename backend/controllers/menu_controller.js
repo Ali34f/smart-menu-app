@@ -1,5 +1,6 @@
 const MenuItem = require('../models/MenuItem');
 const { logActivityHelper } = require('./activity_controller');
+const { createNotification } = require('../utils/notificationHelper');
 
 // @desc    Get all menu items for restaurant
 // @route   GET /api/menu
@@ -71,6 +72,14 @@ exports.createMenuItem = async (req, res, next) => {
       menuItem.name
     );
 
+    await createNotification({
+      restaurantId: req.restaurantId,
+      type: 'menu_item_created',
+      title: 'New menu item added',
+      message: `${req.user.name || req.user.email} added "${menuItem.name}" to the menu.`,
+      createdBy: req.user.id
+    });
+
     res.status(201).json({
       success: true,
       message: 'Menu item created successfully',
@@ -116,6 +125,14 @@ exports.updateMenuItem = async (req, res, next) => {
       menuItem.name
     );
 
+    await createNotification({
+      restaurantId: req.restaurantId,
+      type: 'menu_item_updated',
+      title: 'Menu item updated',
+      message: `${req.user.name || req.user.email} updated "${menuItem.name}".`,
+      createdBy: req.user.id
+    });
+
     res.status(200).json({
       success: true,
       message: 'Menu item updated successfully',
@@ -154,6 +171,14 @@ exports.deleteMenuItem = async (req, res, next) => {
       'menu_item_deleted',
       itemName
     );
+
+    await createNotification({
+      restaurantId: req.restaurantId,
+      type: 'menu_item_deleted',
+      title: 'Menu item removed',
+      message: `${req.user.name || req.user.email} deleted "${itemName}" from the menu.`,
+      createdBy: req.user.id
+    });
 
     res.status(200).json({
       success: true,
@@ -216,6 +241,14 @@ exports.toggleAvailability = async (req, res, next) => {
       'availability_changed',
       menuItem.name
     );
+
+    await createNotification({
+      restaurantId: req.restaurantId,
+      type: 'availability_changed',
+      title: 'Menu item availability changed',
+      message: `${req.user.name || req.user.email} marked "${menuItem.name}" as ${menuItem.isAvailable ? 'active' : 'inactive'}.`,
+      createdBy: req.user.id
+    });
 
     res.status(200).json({
       success: true,

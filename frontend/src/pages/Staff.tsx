@@ -78,6 +78,7 @@ const Staff: React.FC = () => {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
   const canManageStaff = userRole === 'owner' || userRole === 'manager' || isMohammedKhan;
+  const canInviteStaff = userRole === 'owner' || userRole === 'manager';
 
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -148,6 +149,11 @@ const Staff: React.FC = () => {
 
   const handleInviteStaff = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canInviteStaff) {
+      showError('Only owners and managers can invite staff');
+      return;
+    }
     
     if (!inviteForm.name || !inviteForm.email || !inviteForm.password) {
       showError('Please fill in all fields');
@@ -345,7 +351,7 @@ const Staff: React.FC = () => {
               </div>
               <input
                 type="text"
-                placeholder="Q Search menu items..."
+                placeholder="Search staff..."
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
               />
             </div>
@@ -502,7 +508,7 @@ const Staff: React.FC = () => {
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Staff Management</h2>
                 <p className="text-gray-600 dark:text-gray-400">Manage your restaurant team members</p>
               </div>
-              {canManageStaff && (
+              {canInviteStaff && (
                 <button
                   onClick={() => setIsInviteModalOpen(true)}
                   className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
@@ -808,10 +814,15 @@ const Staff: React.FC = () => {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm" onClick={() => setIsInviteModalOpen(false)}></div>
           <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full transform transition-all" onClick={(e) => e.stopPropagation()}>
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-lg w-full transform transition-all" onClick={(e) => e.stopPropagation()}>
               <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Invite New Staff</h3>
+                <div className="flex items-start justify-between mb-5">
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Invite Team Member</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Send secure access to your staff dashboard.
+                    </p>
+                  </div>
                   <button
                     onClick={() => setIsInviteModalOpen(false)}
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
@@ -822,49 +833,66 @@ const Staff: React.FC = () => {
                   </button>
                 </div>
 
-                <form onSubmit={handleInviteStaff} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={inviteForm.name}
-                      onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      required
-                    />
+                <form onSubmit={handleInviteStaff} className="space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Full Name</label>
+                      <input
+                        type="text"
+                        value={inviteForm.name}
+                        onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        placeholder="e.g. Sarah Ahmed"
+                        required
+                      />
+                    </div>
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label>
+                      <select
+                        value={inviteForm.role}
+                        onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value as 'manager' | 'staff' })}
+                        className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      >
+                        <option value="staff">Staff</option>
+                        <option value="manager">Manager</option>
+                      </select>
+                    </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Email Address</label>
                     <input
                       type="email"
                       value={inviteForm.email}
                       onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="name@restaurant.com"
                       required
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Temporary Password</label>
                     <input
                       type="password"
                       value={inviteForm.password}
                       onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      placeholder="Minimum 6 characters"
                       required
                       minLength={6}
                     />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">
+                      The team member can update this after first login.
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
-                    <select
-                      value={inviteForm.role}
-                      onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value as 'manager' | 'staff' })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="manager">Manager</option>
-                    </select>
+
+                  <div className="rounded-lg border border-green-100 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2.5">
+                    <p className="text-xs font-medium text-green-700 dark:text-green-300">
+                      Access reminder: Managers can invite and manage staff. Staff can only view team details.
+                    </p>
                   </div>
+
                   <div className="flex items-center justify-end space-x-3 pt-4">
                     <button
                       type="button"

@@ -1,5 +1,6 @@
 const User = require('../models/Users');
 const Restaurant = require('../models/Restaurant');
+const { createNotification } = require('../utils/notificationHelper');
 
 // @desc    Get all staff for restaurant
 // @route   GET /api/staff
@@ -115,6 +116,14 @@ exports.addStaff = async (req, res, next) => {
       invitationAccepted: false // New invites need to be accepted
     });
 
+    await createNotification({
+      restaurantId: req.restaurantId,
+      type: 'staff_invited',
+      title: 'New staff member invited',
+      message: `${req.user.name || req.user.email} invited ${staff.name} as ${role}.`,
+      createdBy: req.user.id
+    });
+
     res.status(201).json({
       success: true,
       data: {
@@ -181,7 +190,16 @@ exports.updateStaff = async (req, res, next) => {
     if (role && ['manager', 'staff'].includes(role)) staff.role = role;
     if (typeof isActive === 'boolean') staff.isActive = isActive;
 
+    const targetRestaurantId = staff.restaurantId || req.restaurantId;
     await staff.save();
+
+    await createNotification({
+      restaurantId: targetRestaurantId,
+      type: 'staff_updated',
+      title: 'Staff member updated',
+      message: `${req.user.name || req.user.email} updated ${staff.name}'s profile.`,
+      createdBy: req.user.id
+    });
 
     res.status(200).json({
       success: true,
@@ -239,8 +257,19 @@ exports.deleteStaff = async (req, res, next) => {
       });
     }
 
+    const deletedStaffName = staff.name;
+    const targetRestaurantId = staff.restaurantId || req.restaurantId;
+
     // Hard delete - completely remove from database
     await User.findByIdAndDelete(req.params.id);
+
+    await createNotification({
+      restaurantId: targetRestaurantId,
+      type: 'staff_deleted',
+      title: 'Staff member removed',
+      message: `${req.user.name || req.user.email} removed ${deletedStaffName} from the team.`,
+      createdBy: req.user.id
+    });
 
     res.status(200).json({
       success: true,
@@ -278,6 +307,14 @@ exports.acceptInvitation = async (req, res, next) => {
 
     user.invitationAccepted = true;
     await user.save();
+
+    await createNotification({
+      restaurantId: user.restaurantId,
+      type: 'invitation_accepted',
+      title: 'Invitation accepted',
+      message: `${user.name} accepted their team invitation.`,
+      createdBy: user._id
+    });
 
     res.status(200).json({
       success: true,

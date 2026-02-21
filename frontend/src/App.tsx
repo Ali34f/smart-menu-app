@@ -19,6 +19,7 @@ import AddIngredient from './pages/AddIngredient';
 import ViewIngredient from './pages/ViewIngredient';
 import EditIngredient from './pages/EditIngredient';
 import InvitationAcceptance from './components/InvitationAcceptance';
+import PublicMenu from './pages/PublicMenu';
 import './App.css';
 
 function App() {
@@ -87,6 +88,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/public/menu/:restaurantId" element={<PublicMenu />} />
 
         {/* Protected Routes */}
         <Route 

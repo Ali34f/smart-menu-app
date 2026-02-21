@@ -18,6 +18,7 @@ require('./models/Users');
 require('./models/Allergens');
 require('./models/Ingredient');
 require('./models/MenuItem');
+require('./models/Notification');
 
 // Initialize Express app
 const app = express();
@@ -26,9 +27,25 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Enable CORS
+// Enable CORS for local dev + configured frontend URLs
+const configuredOrigins = [
+  process.env.CLIENT_URL,
+  process.env.CORS_ORIGIN,
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+const isLocalDevOrigin = (origin) => {
+  return /^http:\/\/(localhost|127\.0\.0\.1|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/.test(origin);
+};
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (configuredOrigins.includes(origin) || isLocalDevOrigin(origin)) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
   credentials: true
 }));
 
@@ -51,6 +68,7 @@ app.use('/api/public', require('./routes/public'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/activity', require('./routes/activity'));
 app.use('/api/ingredients', require('./routes/ingredient'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

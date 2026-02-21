@@ -107,7 +107,8 @@ const restaurantSchema = new mongoose.Schema({
 restaurantSchema.pre('save', function(next) {
   if (!this.qrCode) {
     // This will be the public menu URL for customers
-    this.qrCode = `https://smartmenu.app/menu/${this._id}`;
+    const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    this.qrCode = `${baseUrl}/public/menu/${this._id}`;
   }
   next();
 });
