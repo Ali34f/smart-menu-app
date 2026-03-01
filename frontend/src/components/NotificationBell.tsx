@@ -117,6 +117,42 @@ const getDayLabel = (dateString: string): string => {
   return 'Earlier';
 };
 
+const NOTIFICATIONS_MUTED_KEY = 'notificationsMuted';
+
+let sharedAudioContext: AudioContext | null = null;
+
+const getAudioContext = (): AudioContext | null => {
+  if (typeof window === 'undefined') return null;
+  if (sharedAudioContext) return sharedAudioContext;
+  const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+  if (!Ctx) return null;
+  sharedAudioContext = new Ctx();
+  return sharedAudioContext;
+};
+
+const playNotificationSound = async () => {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') await ctx.resume();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  } catch (_) {}
+};
+
+const unlockAudioOnInteraction = () => {
+  const ctx = getAudioContext();
+  if (ctx?.state === 'suspended') ctx.resume();
+};
+
 const getActorName = (item: NotificationItem): string => {
   if (typeof item.createdBy === 'string') return '';
   return item.createdBy?.name || item.createdBy?.email || '';
@@ -128,7 +164,10 @@ const NotificationBell: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [markingRead, setMarkingRead] = useState(false);
+  const [muted, setMuted] = useState(() => localStorage.getItem(NOTIFICATIONS_MUTED_KEY) === 'true');
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const prevUnreadRef = useRef<number>(0);
+  const isFirstFetch = useRef(true);
 
   const fetchNotifications = async (showLoader = false) => {
     if (showLoader) setLoading(true);
@@ -137,6 +176,25 @@ const NotificationBell: React.FC = () => {
         notificationService.getNotifications(),
         notificationService.getUnreadCount()
       ]);
+      const prevUnread = prevUnreadRef.current;
+      prevUnreadRef.current = unread;
+
+      if (!isFirstFetch.current && unread > prevUnread && prevUnread >= 0) {
+        const latest = list.find((n) => !n.isRead) || list[0];
+        const isMuted = localStorage.getItem(NOTIFICATIONS_MUTED_KEY) === 'true';
+        if (latest && !isMuted) {
+          void playNotificationSound();
+        }
+        if (latest) {
+          toast((t) => (
+            <div className="flex flex-col gap-1">
+              <span className="font-semibold text-gray-900 dark:text-white">{latest.title}</span>
+              <span className="text-sm text-gray-600 dark:text-gray-300">{latest.message}</span>
+            </div>
+          ), { duration: 4000 });
+        }
+      }
+      isFirstFetch.current = false;
       setNotifications(list);
       setUnreadCount(unread);
     } catch (error) {
@@ -145,6 +203,12 @@ const NotificationBell: React.FC = () => {
       if (showLoader) setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const onMuteChange = (e: CustomEvent<{ muted: boolean }>) => setMuted(e.detail?.muted ?? false);
+    window.addEventListener('notificationsMutedChanged', onMuteChange as EventListener);
+    return () => window.removeEventListener('notificationsMutedChanged', onMuteChange as EventListener);
+  }, []);
 
   useEffect(() => {
     fetchNotifications(true);
@@ -209,7 +273,10 @@ const NotificationBell: React.FC = () => {
     <div className="relative" ref={panelRef}>
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          unlockAudioOnInteraction();
+          setOpen((prev) => !prev);
+        }}
         className="relative p-2 text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
         aria-label="Open notifications"
       >
@@ -232,14 +299,24 @@ const NotificationBell: React.FC = () => {
                 {displayedUnreadCount > 0 ? `${displayedUnreadCount} unread update${displayedUnreadCount > 1 ? 's' : ''}` : 'You are all caught up'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              disabled={markingRead || displayedUnreadCount === 0}
-              className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:text-gray-400 disabled:cursor-not-allowed"
-            >
-              {markingRead ? 'Marking...' : 'Mark all read'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => { unlockAudioOnInteraction(); void playNotificationSound(); }}
+                className="text-xs font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                title="Test notification sound"
+              >
+                Test sound
+              </button>
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                disabled={markingRead || displayedUnreadCount === 0}
+                className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+              >
+                {markingRead ? 'Marking...' : 'Mark all read'}
+              </button>
+            </div>
           </div>
 
           <div className="max-h-96 overflow-y-auto bg-gray-50/50 dark:bg-gray-900/20">
