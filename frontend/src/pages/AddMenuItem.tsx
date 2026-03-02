@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import api from '../services/api';
+import { restaurantService } from '../services/restaurantService';
+import { getCategoriesForCuisine } from '../utils/menuCategories';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -41,11 +43,28 @@ const AddMenuItem: React.FC = () => {
     isAvailable: true
   });
 
-  const categories = ['Mains', 'Starters', 'Sides', 'Desserts', 'Drinks'];
+  const [categories, setCategories] = useState<string[]>(['Mains', 'Starters', 'Sides', 'Desserts', 'Drinks']);
   const dietaryOptions = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Halal', 'Kosher'];
 
   useEffect(() => {
     fetchAllergens();
+  }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const restaurant = await restaurantService.getRestaurant();
+        const list = getCategoriesForCuisine(restaurant.cuisineType);
+        setCategories(list);
+        setFormData((prev) => ({
+          ...prev,
+          category: list.includes(prev.category) ? prev.category : list[0] || 'Mains'
+        }));
+      } catch (_) {
+        // keep default categories
+      }
+    };
+    load();
   }, []);
 
   const fetchAllergens = async () => {

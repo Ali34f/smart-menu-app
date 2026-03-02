@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import api from '../services/api';
+import { restaurantService } from '../services/restaurantService';
+import { getCategoriesForCuisine } from '../utils/menuCategories';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -43,7 +45,7 @@ const EditMenuItem: React.FC = () => {
     isAvailable: true
   });
 
-  const categories = ['Mains', 'Starters', 'Sides', 'Desserts', 'Drinks'];
+  const [categories, setCategories] = useState<string[]>(['Mains', 'Starters', 'Sides', 'Desserts', 'Drinks']);
   const dietaryOptions = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Halal', 'Kosher'];
 
   useEffect(() => {
@@ -52,6 +54,25 @@ const EditMenuItem: React.FC = () => {
       fetchMenuItem();
     }
   }, [id]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const restaurant = await restaurantService.getRestaurant();
+        const list = getCategoriesForCuisine(restaurant.cuisineType);
+        setCategories(list);
+      } catch (_) {
+        // keep default categories
+      }
+    };
+    load();
+  }, []);
+
+  const ensureCategoryInList = (category: string) => {
+    setCategories((prev) =>
+      prev.includes(category) ? prev : [...prev, category]
+    );
+  };
 
   const fetchAllergens = async () => {
     try {
@@ -94,6 +115,7 @@ const EditMenuItem: React.FC = () => {
         dietaryInfo: dietaryArray,
         isAvailable: item.isAvailable
       });
+      ensureCategoryInList(item.category);
     } catch (error) {
       console.error('Error fetching menu item:', error);
       navigate('/menu-items');
