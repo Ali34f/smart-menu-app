@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { menuService } from '../services/menuService';
@@ -61,7 +61,12 @@ const Menu: React.FC = () => {
     }
   }, []);
 
-  const categories = ['All Categories', 'Mains', 'Starters', 'Sides', 'Desserts', 'Drinks'];
+  const categories = useMemo(() => {
+    const fromItems = Array.from(
+      new Set(menuItems.map((item) => item.category).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
+    return ['All Categories', ...fromItems];
+  }, [menuItems]);
   const statuses = ['All Status', 'Active', 'Inactive'];
 
   useEffect(() => {

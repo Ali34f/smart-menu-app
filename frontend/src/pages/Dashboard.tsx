@@ -238,9 +238,9 @@ const Dashboard: React.FC = () => {
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
         {/* Sidebar - COMPLETELY FIXED (NO SCROLL) */}
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
-          {/* Navigation - Compact spacing */}
-          <nav className="p-6 flex flex-col flex-1 justify-between">
+        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+          {/* Navigation - scrollable so Allergens & Reports always reachable */}
+          <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
               {/* Dashboard */}
               <button className="w-full flex items-center space-x-4 px-4 py-3 bg-green-500 text-white rounded-lg font-medium text-sm">
@@ -302,8 +302,8 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* Bottom Navigation */}
-            <div className="space-y-2 pt-4">
+            {/* Reports & Settings */}
+            <div className="space-y-2 pt-4 mt-auto flex-shrink-0">
               {/* Reports */}
               <button
                 onClick={() => navigate('/reports')}

@@ -8,7 +8,20 @@ import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { AllergenDetail, getAllergenDetail } from '../data/allergenDetails';
 import Icon from '@mdi/react';
-import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import {
+  mdiSilverwareForkKnife,
+  mdiLeaf,
+  mdiEgg,
+  mdiFish,
+  mdiNut,
+  mdiGrain,
+  mdiCarrot,
+  mdiSeed,
+  mdiFlask,
+  mdiBottleTonic,
+  mdiAlert,
+  mdiBottleWineOutline
+} from '@mdi/js';
 import { useLanguage } from '../contexts/LanguageContext';
 
 interface Allergen {
@@ -26,21 +39,41 @@ interface MenuItem {
 }
 
 const ALLERGEN_ICON_MAP: Record<string, string> = {
-  milk: '🥛',
-  eggs: '🥚',
-  fish: '🐟',
-  crustaceans: '🦐',
-  molluscs: '🦪',
-  peanuts: '🥜',
-  'tree-nuts': '🌰',
-  soy: '🫘',
-  gluten: '🌾',
-  celery: '🥬',
-  mustard: '🟡',
-  sesame: '⚪',
-  sulphites: '🍇',
-  lupin: '🫘'
+  milk: mdiBottleTonic,
+  eggs: mdiEgg,
+  fish: mdiFish,
+  crustaceans: mdiFish,
+  molluscs: mdiFish,
+  peanuts: mdiNut,
+  'tree-nuts': mdiNut,
+  soy: mdiSeed,
+  gluten: mdiGrain,
+  celery: mdiCarrot,
+  mustard: mdiFlask,
+  sesame: mdiSeed,
+  sulphites: mdiBottleWineOutline,
+  lupin: mdiLeaf
 };
+
+/** Background and icon color classes per allergen for a polished, recognizable look */
+const ALLERGEN_COLORS: Record<string, { bg: string; icon: string }> = {
+  milk: { bg: 'bg-sky-100 dark:bg-sky-900/40', icon: 'text-sky-600 dark:text-sky-400' },
+  eggs: { bg: 'bg-amber-100 dark:bg-amber-900/40', icon: 'text-amber-700 dark:text-amber-400' },
+  fish: { bg: 'bg-cyan-100 dark:bg-cyan-900/40', icon: 'text-cyan-600 dark:text-cyan-400' },
+  crustaceans: { bg: 'bg-rose-100 dark:bg-rose-900/40', icon: 'text-rose-600 dark:text-rose-400' },
+  molluscs: { bg: 'bg-teal-100 dark:bg-teal-900/40', icon: 'text-teal-600 dark:text-teal-400' },
+  peanuts: { bg: 'bg-amber-100 dark:bg-amber-900/40', icon: 'text-amber-800 dark:text-amber-300' },
+  'tree-nuts': { bg: 'bg-orange-100 dark:bg-orange-900/40', icon: 'text-orange-700 dark:text-orange-400' },
+  soy: { bg: 'bg-emerald-100 dark:bg-emerald-900/40', icon: 'text-emerald-600 dark:text-emerald-400' },
+  gluten: { bg: 'bg-yellow-100 dark:bg-yellow-900/40', icon: 'text-yellow-700 dark:text-yellow-400' },
+  celery: { bg: 'bg-green-100 dark:bg-green-900/40', icon: 'text-green-600 dark:text-green-400' },
+  mustard: { bg: 'bg-yellow-100 dark:bg-yellow-900/40', icon: 'text-yellow-600 dark:text-yellow-500' },
+  sesame: { bg: 'bg-stone-100 dark:bg-stone-700/50', icon: 'text-stone-600 dark:text-stone-300' },
+  sulphites: { bg: 'bg-violet-100 dark:bg-violet-900/40', icon: 'text-violet-600 dark:text-violet-400' },
+  lupin: { bg: 'bg-lime-100 dark:bg-lime-900/40', icon: 'text-lime-700 dark:text-lime-400' }
+};
+
+const DEFAULT_ALLERGEN_COLORS = { bg: 'bg-gray-100 dark:bg-gray-700', icon: 'text-gray-600 dark:text-gray-300' };
 
 const Allergens: React.FC = () => {
   const navigate = useNavigate();
@@ -153,9 +186,14 @@ const Allergens: React.FC = () => {
     navigate('/login');
   };
 
-  const getIconEmoji = (iconKey?: string) => {
-    if (!iconKey) return '⚠️';
-    return ALLERGEN_ICON_MAP[iconKey.toLowerCase()] ?? '⚠️';
+  const getAllergenIconPath = (iconKey?: string): string => {
+    if (!iconKey) return mdiAlert;
+    return ALLERGEN_ICON_MAP[iconKey.toLowerCase()] ?? mdiAlert;
+  };
+
+  const getAllergenColors = (iconKey?: string) => {
+    if (!iconKey) return DEFAULT_ALLERGEN_COLORS;
+    return ALLERGEN_COLORS[iconKey.toLowerCase()] ?? DEFAULT_ALLERGEN_COLORS;
   };
 
   const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
@@ -205,8 +243,8 @@ const Allergens: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
-          <nav className="flex-1 p-6 flex flex-col justify-between">
+        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+          <nav className="flex-1 p-6 flex flex-col min-h-0 overflow-y-auto">
             <div className="space-y-2">
               <button
                 onClick={() => navigate('/dashboard')}
@@ -265,7 +303,7 @@ const Allergens: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-2 pt-4">
+            <div className="space-y-2 pt-4 mt-auto flex-shrink-0">
               <button
                 onClick={() => navigate('/reports')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -355,14 +393,19 @@ const Allergens: React.FC = () => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {filteredAllergens.map((a) => (
+                      {filteredAllergens.map((a) => {
+                        const colors = getAllergenColors(a.icon);
+                        return (
                         <div
                           key={a._id}
                           className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 shadow-sm hover:shadow-md transition"
                         >
                           <div className="flex items-start gap-4">
-                            <span className="text-3xl flex-shrink-0" role="img" aria-label={a.name}>
-                              {getIconEmoji(a.icon)}
+                            <span
+                              className={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center ${colors.bg} ${colors.icon}`}
+                              aria-label={a.name}
+                            >
+                              <Icon path={getAllergenIconPath(a.icon)} size={1.5} />
                             </span>
                             <div className="min-w-0 flex-1">
                               <h4 className="font-semibold text-gray-800 dark:text-white">{a.name}</h4>
@@ -379,7 +422,7 @@ const Allergens: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ))}
+                      ); })}
                     </div>
                   )}
                 </section>
