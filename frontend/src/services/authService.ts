@@ -27,6 +27,7 @@ export const authService = {
       localStorage.setItem('userEmail', response.data.user.email);
       localStorage.setItem('userName', response.data.user.name || '');
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
+      localStorage.setItem('restaurantId', response.data.user.restaurantId || '');
       localStorage.setItem('userRole', response.data.user.role);
       localStorage.setItem('invitationAccepted', 'true');
     }
@@ -42,6 +43,7 @@ export const authService = {
       localStorage.setItem('userEmail', response.data.user.email);
       localStorage.setItem('userName', response.data.user.name || '');
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
+      localStorage.setItem('restaurantId', response.data.user.restaurantId || '');
       localStorage.setItem('userRole', response.data.user.role);
       localStorage.setItem('qrCode', response.data.user.qrCode || '');
 
@@ -67,6 +69,7 @@ export const authService = {
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userName');
     localStorage.removeItem('restaurantName');
+    localStorage.removeItem('restaurantId');
     localStorage.removeItem('userRole');
     localStorage.removeItem('qrCode');
     localStorage.removeItem('profilePicture');

@@ -31,6 +31,7 @@ api.interceptors.response.use(
       localStorage.removeItem('userEmail');
       localStorage.removeItem('userName');
       localStorage.removeItem('restaurantName');
+      localStorage.removeItem('restaurantId');
       localStorage.removeItem('userRole');
       localStorage.removeItem('qrCode');
       localStorage.removeItem('invitationAccepted');
