@@ -98,6 +98,10 @@ const restaurantSchema = new mongoose.Schema({
   qrCode: {
     type: String,
     default: null
+  },
+  dailyScans: {
+    type: Object,
+    default: {}
   }
 }, {
   timestamps: true

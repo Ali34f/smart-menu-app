@@ -38,10 +38,14 @@ const isLocalDevOrigin = (origin) => {
   return /^http:\/\/(localhost|127\.0\.0\.1|\d{1,3}(\.\d{1,3}){3})(:\d+)?$/.test(origin);
 };
 
+const isNgrokOrigin = (origin) => {
+  return /^https?:\/\/[a-zA-Z0-9.-]*ngrok-free\.app(:\d+)?$/.test(origin || '');
+};
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (configuredOrigins.includes(origin) || isLocalDevOrigin(origin)) {
+    if (configuredOrigins.includes(origin) || isLocalDevOrigin(origin) || isNgrokOrigin(origin)) {
       return callback(null, true);
     }
     return callback(null, false);

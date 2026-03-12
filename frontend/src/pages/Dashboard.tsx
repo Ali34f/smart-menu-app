@@ -176,14 +176,6 @@ const Dashboard: React.FC = () => {
   const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
   const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Top Navigation Bar */}
@@ -398,6 +390,12 @@ const Dashboard: React.FC = () => {
         {/* Main Content - SCROLLABLE ONLY */}
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
+            {loading ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+              </div>
+            ) : (
+              <>
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
@@ -649,6 +647,9 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+              </>
+            )}
           </div>
         </main>
       </div>

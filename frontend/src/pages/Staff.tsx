@@ -301,14 +301,6 @@ const Staff: React.FC = () => {
     authService.logout();
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Toast Notifications */}
@@ -502,6 +494,12 @@ const Staff: React.FC = () => {
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
+            {loading ? (
+              <div className="flex items-center justify-center py-24">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+              </div>
+            ) : (
+              <>
             {/* Page Title and Action Button */}
             <div className="flex items-center justify-between mb-8">
               <div>
@@ -805,6 +803,7 @@ const Staff: React.FC = () => {
                 </div>
               </div>
             </div>
+            </> )}
           </div>
         </main>
       </div>

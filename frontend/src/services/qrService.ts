@@ -1,13 +1,28 @@
 import api from './api';
 
 export const qrService = {
-  generateQR: async () => {
-    const response = await api.get('/qr/generate');
+  generateQR: async (
+    publicBaseUrl?: string,
+    publicApiBaseUrl?: string,
+    options?: { width?: number; color?: string }
+  ) => {
+    const response = await api.get('/qr/generate', {
+      params: {
+        ...(publicBaseUrl ? { publicBaseUrl } : {}),
+        ...(publicApiBaseUrl ? { publicApiBaseUrl } : {}),
+        ...(options?.width ? { width: options.width } : {}),
+        ...(options?.color ? { color: options.color } : {})
+      }
+    });
     return response.data;
   },
 
-  downloadQR: async () => {
+  downloadQR: async (publicBaseUrl?: string, publicApiBaseUrl?: string) => {
     const response = await api.get('/qr/download', {
+      params: {
+        ...(publicBaseUrl ? { publicBaseUrl } : {}),
+        ...(publicApiBaseUrl ? { publicApiBaseUrl } : {})
+      },
       responseType: 'blob'
     });
 
@@ -18,5 +33,10 @@ export const qrService = {
     document.body.appendChild(link);
     link.click();
     link.remove();
+  },
+
+  getScanAnalytics: async () => {
+    const response = await api.get('/qr/analytics');
+    return response.data;
   }
 };

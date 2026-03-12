@@ -193,14 +193,6 @@ const Ingredients: React.FC = () => {
 
   const handleLogout = () => authService.logout();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
-      </div>
-    );
-  }
-
   return (
     <>
       {toasts.map((t) => (
@@ -365,6 +357,12 @@ const Ingredients: React.FC = () => {
 
           <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
             <div className="p-8">
+              {loading ? (
+                <div className="flex items-center justify-center py-24">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+                </div>
+              ) : (
+                <>
               {/* Page Title and Action Button - full width row like Menu Items / Staff */}
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -674,6 +672,7 @@ const Ingredients: React.FC = () => {
                 </div>
               </div>
             </div>
+                </> )}
             </div>
           </main>
         </div>

@@ -47,8 +47,8 @@ const ViewMenuItem: React.FC = () => {
     }
   };
 
-  const getDietaryLabels = () => {
-    if (!menuItem?.dietaryInfo) return [];
+  const dietaryLabels = menuItem ? (() => {
+    if (!menuItem.dietaryInfo) return [];
     const labels = [];
     if (menuItem.dietaryInfo.vegetarian) labels.push('Vegetarian');
     if (menuItem.dietaryInfo.vegan) labels.push('Vegan');
@@ -57,25 +57,11 @@ const ViewMenuItem: React.FC = () => {
     if (menuItem.dietaryInfo.halal) labels.push('Halal');
     if (menuItem.dietaryInfo.kosher) labels.push('Kosher');
     return labels;
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50/30 to-emerald-50/40 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
-      </div>
-    );
-  }
-
-  if (!menuItem) {
-    return null;
-  }
-
-  const dietaryLabels = getDietaryLabels();
+  })() : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-green-50/30 to-emerald-50/40">
-      {/* Header */}
+      {/* Header - always visible */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-5">
           <div className="flex items-center justify-between">
@@ -109,6 +95,11 @@ const ViewMenuItem: React.FC = () => {
 
       {/* Content */}
       <div className="max-w-5xl mx-auto px-6 py-8">
+        {loading ? (
+          <div className="flex items-center justify-center py-24">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+          </div>
+        ) : !menuItem ? null : (
         <div className="space-y-6">
           {/* Image and Basic Info */}
           <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
@@ -232,6 +223,7 @@ const ViewMenuItem: React.FC = () => {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

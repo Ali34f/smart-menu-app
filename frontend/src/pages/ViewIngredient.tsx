@@ -46,16 +46,6 @@ const ViewIngredient: React.FC = () => {
 
   const getIngredientName = (a: AllergenRef | string) => (typeof a === 'string' ? a : a.name);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-600"></div>
-      </div>
-    );
-  }
-
-  if (!ingredient) return null;
-
   return (
     <>
       {toasts.map((t) => (
@@ -76,7 +66,7 @@ const ViewIngredient: React.FC = () => {
               </button>
               <h1 className="text-xl font-bold text-gray-800 dark:text-white">Ingredient Details</h1>
               <button
-                onClick={() => navigate(`/ingredients/edit/${id}`)}
+                onClick={() => id ? navigate(`/ingredients/edit/${id}`) : undefined}
                 className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium"
               >
                 Edit
@@ -86,6 +76,11 @@ const ViewIngredient: React.FC = () => {
         </div>
 
         <div className="max-w-2xl mx-auto px-6 py-8">
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600" />
+            </div>
+          ) : !ingredient ? null : (
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Name</label>
@@ -125,6 +120,7 @@ const ViewIngredient: React.FC = () => {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </>

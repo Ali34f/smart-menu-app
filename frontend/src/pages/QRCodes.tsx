@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
@@ -6,6 +6,7 @@ import ProfileDropdown from '../components/ProfileDropdown';
 import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
+import { qrService } from '../services/qrService';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const QRCodes: React.FC = () => {
@@ -16,13 +17,29 @@ const QRCodes: React.FC = () => {
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
-  const qrCodeImage = localStorage.getItem('qrCode') || '';
+  const [qrCodeImage, setQrCodeImage] = useState<string>(localStorage.getItem('qrCode') || '');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>(localStorage.getItem('qrCodeUrl') || '');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [publicBaseUrl, setPublicBaseUrl] = useState<string>(() => {
+    const saved = localStorage.getItem('publicBaseUrl');
+    if (saved) return saved;
+    return window.location.origin;
+  });
+  const [publicApiBaseUrl, setPublicApiBaseUrl] = useState<string>(() => {
+    const saved = localStorage.getItem('publicApiBaseUrl');
+    if (saved) return saved;
+    return `${window.location.protocol}//${window.location.hostname}:5002/api`;
+  });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const [size, setSize] = useState('Large (300x300)');
   const [format, setFormat] = useState('PNG');
   const [includeLogo, setIncludeLogo] = useState(true);
   const [color, setColor] = useState('#000000');
+  const [scanAnalytics, setScanAnalytics] = useState<{ date: string; label: string; count: number }[]>([]);
+  const [scanSummary, setScanSummary] = useState<{ totalScansLast30?: number }>({});
+  const isFirstUrlChange = useRef(true);
+  const isFirstSizeColor = useRef(true);
 
   const displayRole = useMemo(
     () => userRole.charAt(0).toUpperCase() + userRole.slice(1),
@@ -34,12 +51,83 @@ const QRCodes: React.FC = () => {
     if (savedPic) setProfilePicture(savedPic);
   }, []);
 
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await qrService.getScanAnalytics();
+        setScanAnalytics(res?.data ?? []);
+        setScanSummary(res?.summary ?? {});
+      } catch {
+        setScanAnalytics([]);
+        setScanSummary({});
+      }
+    };
+    load();
+  }, []);
+
+  const sizeToWidth: Record<string, number> = {
+    'Small (200x200)': 200,
+    'Medium (250x250)': 250,
+    'Large (300x300)': 300
+  };
+
+  const generateQRCode = async () => {
+    try {
+      setQrLoading(true);
+      const width = sizeToWidth[size] ?? 300;
+      const response = await qrService.generateQR(publicBaseUrl, publicApiBaseUrl, {
+        width,
+        color: color || undefined
+      });
+      const nextQrImage = response?.qrCodeImage || '';
+      const nextQrUrl = response?.qrCodeUrl || '';
+      setQrCodeImage(nextQrImage);
+      setQrCodeUrl(nextQrUrl);
+      if (nextQrImage) localStorage.setItem('qrCode', nextQrImage);
+      if (nextQrUrl) localStorage.setItem('qrCodeUrl', nextQrUrl);
+      localStorage.setItem('publicBaseUrl', publicBaseUrl.replace(/\/$/, ''));
+      localStorage.setItem('publicApiBaseUrl', publicApiBaseUrl.replace(/\/$/, ''));
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    generateQRCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // When user changes the public URLs, regenerate the QR so it always matches
+  useEffect(() => {
+    if (isFirstUrlChange.current) {
+      isFirstUrlChange.current = false;
+      return;
+    }
+    const t = setTimeout(() => generateQRCode(), 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicBaseUrl, publicApiBaseUrl]);
+
+  // When size or color changes, regenerate the QR (skip first run to avoid double generate on load)
+  useEffect(() => {
+    if (isFirstSizeColor.current) {
+      isFirstSizeColor.current = false;
+      return;
+    }
+    if (!qrCodeUrl) return;
+    const t = setTimeout(() => generateQRCode(), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size, color]);
+
   const handleLogout = () => {
     authService.logout();
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col qr-codes-page">
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center space-x-4">
@@ -81,8 +169,8 @@ const QRCodes: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
-          <nav className="p-6 flex flex-col flex-1">
+        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+          <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
               <button onClick={() => navigate('/dashboard')} className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -167,12 +255,70 @@ const QRCodes: React.FC = () => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Your Restaurant QR Code</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-6">Customers scan this to view your menu</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">Customers scan this to view your menu. Works from any network when using a public URL (e.g. ngrok).</p>
+
+                <div className="hidden print:hidden">
+                  <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">To use on your phone (same Wi‑Fi)</h4>
+                  <ol className="text-xs text-green-700 dark:text-green-300 space-y-1 list-decimal list-inside">
+                    <li>Get your computer’s IP (e.g. Mac: run <code className="bg-green-100 dark:bg-gray-700 px-1 rounded">ipconfig getifaddr en0</code>).</li>
+                    <li>Set <strong>Public app URL</strong> and <strong>Public API URL</strong> below using that IP.</li>
+                    <li>The QR updates automatically; or click <strong>Regenerate</strong>.</li>
+                    <li>Connect your phone to the <strong>same Wi‑Fi</strong> and scan the QR.</li>
+                  </ol>
+                </div>
+
+                <div className="w-full max-w-xl mb-6 space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                      Public app URL for QR
+                    </label>
+                    <input
+                      type="text"
+                      value={publicBaseUrl}
+                      onChange={(e) => setPublicBaseUrl(e.target.value)}
+                      placeholder="http://192.168.x.x:3000"
+                      className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg"
+                    />
+                    {publicBaseUrl.includes('localhost') && (
+                      <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
+                        localhost works only on this computer. Use your laptop IP for phone scanning.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                      Public API URL for menu data
+                    </label>
+                    <input
+                      type="text"
+                      value={publicApiBaseUrl}
+                      onChange={(e) => setPublicApiBaseUrl(e.target.value)}
+                      placeholder="http://192.168.x.x:5002/api"
+                      className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg"
+                    />
+                    {publicApiBaseUrl.includes('localhost') && (
+                      <div className="mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <p className="text-xs font-medium text-red-700 dark:text-red-400">
+                          Phones cannot use localhost. Use your laptop IP (e.g. http://192.168.1.x:5002/api) or an ngrok URL, then the QR will update automatically.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex flex-col items-center">
-                  <div className="w-44 h-44 rounded-xl border-2 border-green-500 bg-white flex items-center justify-center p-2">
+                  <div className="relative w-44 h-44 rounded-xl border-2 border-green-500 bg-white flex items-center justify-center p-2">
                     {qrCodeImage ? (
-                      <img src={qrCodeImage} alt="Restaurant QR Code" className="w-full h-full object-contain" />
+                      <>
+                        <img src={qrCodeImage} alt="Restaurant QR Code" className="w-full h-full object-contain" />
+                        {includeLogo && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-10 h-10 rounded-lg bg-white border-2 border-green-500 flex items-center justify-center shadow-sm">
+                              <span className="text-green-600 font-bold text-xs">SM</span>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <svg viewBox="0 0 120 120" className="w-full h-full">
                         <rect width="120" height="120" fill="#fff" />
@@ -219,28 +365,64 @@ const QRCodes: React.FC = () => {
                     )}
                   </div>
                   <p className="mt-4 font-semibold text-gray-800 dark:text-white">{restaurantName} Menu</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{`${restaurantName.toLowerCase().replace(/\s+/g, '-')}.app/menu`}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 break-all text-center">
+                    {qrCodeUrl || 'Generating menu link...'}
+                  </p>
 
                   <div className="mt-5 flex flex-wrap gap-2 justify-center">
-                    <button className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition flex items-center gap-2">
+                    <button
+                      onClick={() => qrService.downloadQR(publicBaseUrl, publicApiBaseUrl)}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition flex items-center gap-2"
+                    >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12" />
                       </svg>
                       Download QR Code
                     </button>
-                    <button className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2"
+                    >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6v-8z" />
                       </svg>
                       Print QR Code
                     </button>
-                    <button className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2">
+                    <button
+                      onClick={generateQRCode}
+                      disabled={qrLoading}
+                      className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-60"
+                    >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      Regenerate
+                      {qrLoading ? 'Generating...' : 'Regenerate'}
                     </button>
+                    {qrCodeUrl && (
+                      <button
+                        onClick={() => window.open(qrCodeUrl, '_blank')}
+                        className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition"
+                      >
+                        Open Menu Link
+                      </button>
+                    )}
                   </div>
+
+                  {/* Print-only: shown only in print preview */}
+                  <div className="qr-print-only hidden">
+                    {qrCodeImage && (
+                      <>
+                        <img src={qrCodeImage} alt="Restaurant QR Code" className="max-w-[280px] w-full h-auto mx-auto block" />
+                        <p className="text-center text-lg font-semibold text-black mt-3">{restaurantName} Menu</p>
+                        <p className="text-center text-sm text-gray-600 mt-1">Scan to view menu</p>
+                      </>
+                    )}
+                  </div>
+                  {(publicBaseUrl.includes('ngrok') || publicApiBaseUrl.includes('ngrok')) && (
+                    <p className="mt-3 w-full max-w-xl text-xs text-gray-500 dark:text-gray-400">
+                      Using ngrok: keep the tunnel running. Visitors may see a one-time ngrok warning before the menu; to remove it, upgrade to a paid ngrok plan.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -276,19 +458,21 @@ const QRCodes: React.FC = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Total Scans</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">342</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
+                        {typeof scanSummary.totalScansLast30 === 'number' ? scanSummary.totalScansLast30 : '0'}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Unique Visitors</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">289</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Avg Time</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">3m 45s</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Conversions</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">87%</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
                     </div>
                   </div>
                 </div>
@@ -339,56 +523,61 @@ const QRCodes: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 no-print">
               <h4 className="font-semibold text-gray-800 dark:text-white">Daily Scans</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">QR code scan activity over the last 7 days</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">QR code scan activity over the last 7 days (from today)</p>
               <div className="w-full h-56">
-                <svg viewBox="0 0 960 220" className="w-full h-full">
-                  <defs>
-                    <linearGradient id="scanLine" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
-                      <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
-                    </linearGradient>
-                  </defs>
-                  <g stroke="#e5e7eb" strokeWidth="1">
-                    <line x1="60" y1="20" x2="60" y2="190" />
-                    <line x1="60" y1="190" x2="920" y2="190" />
-                    <line x1="180" y1="20" x2="180" y2="190" />
-                    <line x1="300" y1="20" x2="300" y2="190" />
-                    <line x1="420" y1="20" x2="420" y2="190" />
-                    <line x1="540" y1="20" x2="540" y2="190" />
-                    <line x1="660" y1="20" x2="660" y2="190" />
-                    <line x1="780" y1="20" x2="780" y2="190" />
-                    <line x1="900" y1="20" x2="900" y2="190" />
-                    <line x1="60" y1="150" x2="920" y2="150" />
-                    <line x1="60" y1="110" x2="920" y2="110" />
-                    <line x1="60" y1="70" x2="920" y2="70" />
-                    <line x1="60" y1="30" x2="920" y2="30" />
-                  </g>
-                  <polyline
-                    fill="none"
-                    stroke="url(#scanLine)"
-                    strokeWidth="3"
-                    points="60,140 180,118 300,128 420,100 540,80 660,88 780,64 900,56"
-                  />
-                  {[
-                    [60, 140],
-                    [180, 118],
-                    [300, 128],
-                    [420, 100],
-                    [540, 80],
-                    [660, 88],
-                    [780, 64],
-                    [900, 56]
-                  ].map(([x, y]) => (
-                    <circle key={`${x}-${y}`} cx={x} cy={y} r="4" fill="#10b981" />
-                  ))}
-                  {['Dec 1', 'Dec 2', 'Dec 3', 'Dec 4', 'Dec 5', 'Dec 6', 'Dec 7', 'Dec 8'].map((d, i) => (
-                    <text key={d} x={60 + i * 120} y={210} fontSize="12" textAnchor="middle" fill="#6b7280">
-                      {d}
-                    </text>
-                  ))}
-                </svg>
+                {scanAnalytics.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                    No scan data yet. Scans will appear when customers open the menu via the QR link.
+                  </div>
+                ) : (
+                  <svg viewBox="0 0 960 220" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <linearGradient id="scanLine" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
+                      </linearGradient>
+                    </defs>
+                    <g stroke="#e5e7eb" strokeWidth="1">
+                      <line x1="60" y1="20" x2="60" y2="190" />
+                      <line x1="60" y1="190" x2="920" y2="190" />
+                      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                        <line key={i} x1={60 + (i + 1) * 120} y1="20" x2={60 + (i + 1) * 120} y2="190" />
+                      ))}
+                      <line x1="60" y1="150" x2="920" y2="150" />
+                      <line x1="60" y1="110" x2="920" y2="110" />
+                      <line x1="60" y1="70" x2="920" y2="70" />
+                      <line x1="60" y1="30" x2="920" y2="30" />
+                    </g>
+                    {(() => {
+                      const maxCount = Math.max(1, ...scanAnalytics.map((d) => d.count));
+                      const points = scanAnalytics.map((d, i) => {
+                        const x = 60 + (i + 1) * 120;
+                        const y = 190 - (d.count / maxCount) * 160;
+                        return `${x},${y}`;
+                      }).join(' ');
+                      const circles = scanAnalytics.map((d, i) => {
+                        const x = 60 + (i + 1) * 120;
+                        const y = 190 - (d.count / maxCount) * 160;
+                        return { x, y };
+                      });
+                      return (
+                        <>
+                          {points && <polyline fill="none" stroke="url(#scanLine)" strokeWidth="3" points={points} />}
+                          {circles.map((c, i) => (
+                            <circle key={i} cx={c.x} cy={c.y} r="4" fill="#10b981" />
+                          ))}
+                        </>
+                      );
+                    })()}
+                    {scanAnalytics.map((d, i) => (
+                      <text key={d.date} x={60 + (i + 1) * 120} y={210} fontSize="12" textAnchor="middle" fill="#6b7280" className="dark:fill-gray-400">
+                        {d.label}
+                      </text>
+                    ))}
+                  </svg>
+                )}
               </div>
             </div>
           </div>
