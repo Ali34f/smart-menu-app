@@ -17,16 +17,13 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "0.0.0.0:5002:5002"   
+      - "0.0.0.0:5002:5002"
     environment:
       NODE_ENV: development
       PORT: 5002
-      JWT_SECRET: change-me-in-production
-      JWT_EXPIRE: 7d
       CLIENT_URL: ${FRONTEND_URL:-http://localhost:3000}
       CORS_ORIGIN: ${FRONTEND_URL:-http://localhost:3000}
-    depends_on:
-      - mongo
+    # MONGODB_URI and JWT_SECRET come from backend/.env (e.g. your Atlas URI)
 
   frontend:
     build:
