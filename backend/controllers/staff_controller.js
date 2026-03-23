@@ -15,20 +15,23 @@ exports.getStaff = async (req, res, next) => {
     let staff = [];
 
     if (isMohammedKhan) {
-      // Mohammed Khan sees himself + all staff from all restaurants
+      // Mohammed Khan sees himself + all non-owner staff from all restaurants.
+      // This avoids showing other restaurant owners in every staff list,
+      // while still giving the super owner full visibility of teams.
+
       // First, get Mohammed Khan's own record
-      const mohammedKhan = await User.findById(req.user.id)
-        .select('-password');
+      const mohammedKhan = await User.findById(req.user.id).select('-password');
 
-      // Get all staff from all restaurants (excluding Mohammed Khan)
+      // Get all staff from all restaurants (excluding Mohammed Khan and other owners)
       const allStaff = await User.find({
-        _id: { $ne: req.user.id }
+        _id: { $ne: req.user.id },
+        role: { $ne: 'owner' }
       })
-      .select('-password')
-      .populate('restaurantId', 'name')
-      .sort({ createdAt: -1 });
+        .select('-password')
+        .populate('restaurantId', 'name')
+        .sort({ createdAt: -1 });
 
-      // Add Mohammed Khan at the beginning
+      // Add Mohammed Khan at the beginning (so his name appears on every page)
       staff = mohammedKhan ? [mohammedKhan, ...allStaff] : allStaff;
     } else {
       // Regular restaurant owners/managers see their restaurant's staff
@@ -289,8 +292,9 @@ exports.deleteStaff = async (req, res, next) => {
 // @access  Private
 exports.acceptInvitation = async (req, res, next) => {
   try {
+    const { newPassword } = req.body || {};
     const user = await User.findById(req.user.id);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -305,6 +309,16 @@ exports.acceptInvitation = async (req, res, next) => {
       });
     }
 
+    // Require a new password on first acceptance so temporary passwords
+    // are not kept long term.
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a new password with at least 6 characters'
+      });
+    }
+
+    user.password = newPassword.trim();
     user.invitationAccepted = true;
     await user.save();
 

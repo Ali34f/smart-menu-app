@@ -10,11 +10,28 @@ interface InvitationAcceptanceProps {
 const InvitationAcceptance: React.FC<InvitationAcceptanceProps> = ({ onAccept }) => {
   const { toasts, removeToast, success, error: showError } = useToast();
   const [loading, setLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleAccept = async () => {
+    if (!newPassword || !confirmPassword) {
+      showError('Please enter and confirm your new password.');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      showError('New password must be at least 6 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      showError('Passwords do not match.');
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await staffService.acceptInvitation();
+      const response = await staffService.acceptInvitation(newPassword);
 
       if (response.success) {
         success('Invitation accepted successfully!');
@@ -63,6 +80,39 @@ const InvitationAcceptance: React.FC<InvitationAcceptanceProps> = ({ onAccept })
             <p className="text-gray-600 dark:text-gray-300 mb-6">
               You have been invited to join this restaurant team. Please accept the invitation to continue.
             </p>
+            <div className="space-y-4 text-left mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="Enter a new password"
+                  minLength={6}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  placeholder="Re-enter your new password"
+                  minLength={6}
+                  required
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                You&apos;re currently using a temporary password. For security, please set your own password to continue.
+              </p>
+            </div>
             <button
               onClick={handleAccept}
               disabled={loading}

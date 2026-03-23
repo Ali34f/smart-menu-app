@@ -24,6 +24,11 @@ interface PublicRestaurant {
   cuisineType?: string;
 }
 
+interface CartItem {
+  item: PublicMenuItem;
+  quantity: number;
+}
+
 const formatPrice = (value: number) =>
   new Intl.NumberFormat('en-GB', {
     style: 'currency',
@@ -57,6 +62,9 @@ const PublicMenu: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<PublicMenuItem | null>(null);
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const [imageBlobUrls, setImageBlobUrls] = useState<Record<string, string>>({});
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [showOrderSummary, setShowOrderSummary] = useState(false);
 
   const getPublicApiBaseUrl = () => {
     const fromQuery = new URLSearchParams(window.location.search).get('apiBase');
@@ -143,6 +151,59 @@ const PublicMenu: React.FC = () => {
     return Object.entries(grouped);
   }, [items]);
 
+  const cartCount = useMemo(
+    () => cart.reduce((sum, ci) => sum + ci.quantity, 0),
+    [cart]
+  );
+
+  const cartTotal = useMemo(
+    () => cart.reduce((sum, ci) => sum + ci.item.price * ci.quantity, 0),
+    [cart]
+  );
+
+  const addToCart = (item: PublicMenuItem) => {
+    if (!item.isAvailable) return;
+    setCart((prev) => {
+      const existing = prev.find((ci) => ci.item._id === item._id);
+      if (!existing) {
+        return [...prev, { item, quantity: 1 }];
+      }
+      return prev.map((ci) =>
+        ci.item._id === item._id ? { ...ci, quantity: ci.quantity + 1 } : ci
+      );
+    });
+  };
+
+  const updateCartQuantity = (id: string, quantity: number) => {
+    setCart((prev) =>
+      prev
+        .map((ci) =>
+          ci.item._id === id ? { ...ci, quantity: Math.max(1, quantity) } : ci
+        )
+        .filter((ci) => ci.quantity > 0)
+    );
+  };
+
+  const removeFromCart = (id: string) => {
+    setCart((prev) => prev.filter((ci) => ci.item._id !== id));
+  };
+
+  const handlePlaceOrder = () => {
+    if (!cartCount) return;
+    setIsPlacingOrder(true);
+    // For now this is a front-end only order – we simply
+    // show a confirmation summary and clear the cart.
+    setTimeout(() => {
+      setIsPlacingOrder(false);
+      setShowOrderSummary(true);
+    }, 400);
+  };
+
+  const closeOrderSummary = () => {
+    setShowOrderSummary(false);
+    setCart([]);
+  };
+
   const heroInitial = restaurant?.name?.charAt(0).toUpperCase() || 'R';
 
   return (
@@ -195,7 +256,7 @@ const PublicMenu: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-8 pb-24">
             {groupedItems.map(([category, categoryItems]) => (
               <section key={category} className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -266,6 +327,33 @@ const PublicMenu: React.FC = () => {
                               ))}
                             </div>
                           )}
+                          {item.isAvailable && (
+                            <div className="mt-3">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  addToCart(item);
+                                }}
+                                className="inline-flex items-center px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition"
+                              >
+                                <span className="mr-1.5">Add to order</span>
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 4v16m8-8H4"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center pr-3 text-gray-400 group-hover:text-emerald-500 transition">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -325,7 +413,7 @@ const PublicMenu: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="p-5">
+              <div className="p-5 space-y-4">
               <p className="text-xs font-medium text-emerald-600 uppercase tracking-wider">{selectedItem.category}</p>
               <h2 className="text-xl font-semibold text-gray-900 mt-1">{selectedItem.name}</h2>
               <p className="text-sm text-gray-600 mt-2">{selectedItem.description}</p>
@@ -337,6 +425,18 @@ const PublicMenu: React.FC = () => {
                   </span>
                 )}
               </div>
+              {selectedItem.isAvailable && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    addToCart(selectedItem);
+                    setSelectedItem(null);
+                  }}
+                  className="w-full mt-3 inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition"
+                >
+                  Add to order
+                </button>
+              )}
               {selectedItem.allergens && selectedItem.allergens.length > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Allergens</p>
@@ -352,6 +452,90 @@ const PublicMenu: React.FC = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cart bar */}
+      {cartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-4">
+            <div className="rounded-2xl bg-white shadow-lg border border-emerald-100 px-4 py-3 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 text-sm font-semibold">
+                  {cartCount}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                    Your order
+                  </p>
+                  <p className="text-sm text-gray-800">
+                    {cartCount} item{cartCount !== 1 ? 's' : ''} ·{' '}
+                    <span className="font-semibold text-emerald-600">
+                      {formatPrice(cartTotal)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handlePlaceOrder}
+                disabled={isPlacingOrder}
+                className="inline-flex items-center px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition"
+              >
+                {isPlacingOrder ? 'Placing…' : 'Place order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order summary / confirmation */}
+      {showOrderSummary && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={closeOrderSummary}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">Order placed</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Please show this screen to a member of staff so they can confirm and process your order.
+              </p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="space-y-2 text-sm text-gray-800">
+                {cart.map((ci) => (
+                  <div key={ci.item._id} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
+                        {ci.quantity}
+                      </span>
+                      <span>{ci.item.name}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatPrice(ci.item.price * ci.quantity)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-sm font-semibold text-gray-900">
+                <span>Total</span>
+                <span>{formatPrice(cartTotal)}</span>
+              </div>
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                type="button"
+                onClick={closeOrderSummary}
+                className="w-full inline-flex items-center justify-center px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold shadow-sm hover:bg-emerald-700 transition"
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>

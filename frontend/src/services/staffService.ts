@@ -28,8 +28,8 @@ export const staffService = {
     return response.data;
   },
 
-  acceptInvitation: async () => {
-    const response = await api.post('/staff/accept-invitation');
+  acceptInvitation: async (newPassword: string) => {
+    const response = await api.post('/staff/accept-invitation', { newPassword });
     return response.data;
   }
 };
