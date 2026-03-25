@@ -3,8 +3,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Toaster } from 'react-hot-toast';
 import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './pages/Login';
+import PlatformLogin from './pages/PlatformLogin';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import PlatformDashboard from './pages/PlatformDashboard';
 import Menu from './pages/Menu';
 import AddMenuItem from './pages/AddMenuItem';
 import ViewMenuItem from './pages/ViewMenuItem';
@@ -55,9 +57,12 @@ function App() {
 
     const userRole = localStorage.getItem('userRole');
     const invitationStatus = localStorage.getItem('invitationAccepted');
-    // Owners skip; staff/manager must have accepted invite (invitationStatus === 'true')
+    // Owners and super owners skip; staff/manager must have accepted invite
     const needsToAccept =
-      userRole !== 'owner' && invitationStatus !== 'true';
+      userRole !== 'owner' &&
+      userRole !== 'super_owner' &&
+      userRole !== 'platform_admin' &&
+      invitationStatus !== 'true';
 
     if (needsToAccept) {
       return (
@@ -70,6 +75,17 @@ function App() {
       );
     }
 
+    return <>{children}</>;
+  };
+
+  const PlatformRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    if (!isAuthenticated()) {
+      return <Navigate to="/platform/login" replace />;
+    }
+    const userRole = (localStorage.getItem('userRole') || '').toLowerCase();
+    if (userRole !== 'platform_admin' && userRole !== 'super_owner') {
+      return <Navigate to="/dashboard" replace />;
+    }
     return <>{children}</>;
   };
 
@@ -89,11 +105,21 @@ function App() {
         <Routes>
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/platform/login" element={<PlatformLogin />} />
         <Route path="/register" element={<Register />} />
         <Route path="/public/menu/:restaurantId" element={<PublicMenu />} />
 
         {/* Protected Routes */}
         <Route 
+          path="/platform/dashboard"
+          element={
+            <PlatformRoute>
+              <PlatformDashboard />
+            </PlatformRoute>
+          }
+        />
+
+        <Route
           path="/dashboard" 
           element={
             <ProtectedRoute>

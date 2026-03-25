@@ -2,37 +2,31 @@ const User = require('../models/Users');
 const Restaurant = require('../models/Restaurant');
 const { createNotification } = require('../utils/notificationHelper');
 
+const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'super_owner';
+
 // @desc    Get all staff for restaurant
 // @route   GET /api/staff
 // @access  Private (Owner, Manager, Staff)
 exports.getStaff = async (req, res, next) => {
   try {
-    // Check if the logged-in user is Mohammed Khan (super owner)
-    // Check for both "mohammed khan" and just "mohammed" to be more flexible
-    const isMohammedKhan = req.user.name.toLowerCase().includes('mohammed') ||
-                          req.user.email.toLowerCase().includes('mohammed');
-
     let staff = [];
 
-    if (isMohammedKhan) {
-      // Mohammed Khan sees himself + all non-owner staff from all restaurants.
-      // This avoids showing other restaurant owners in every staff list,
-      // while still giving the super owner full visibility of teams.
+    if (isPlatformAdminRole(req.user.role)) {
+      // Platform admins: list only the active workspace restaurant's team (not yourself)
+      if (!req.restaurantId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Select an active restaurant workspace before viewing staff'
+        });
+      }
 
-      // First, get Mohammed Khan's own record
-      const mohammedKhan = await User.findById(req.user.id).select('-password');
-
-      // Get all staff from all restaurants (excluding Mohammed Khan and other owners)
-      const allStaff = await User.find({
-        _id: { $ne: req.user.id },
-        role: { $ne: 'owner' }
+      staff = await User.find({
+        restaurantId: req.restaurantId,
+        _id: { $ne: req.user.id }
       })
         .select('-password')
         .populate('restaurantId', 'name')
         .sort({ createdAt: -1 });
-
-      // Add Mohammed Khan at the beginning (so his name appears on every page)
-      staff = mohammedKhan ? [mohammedKhan, ...allStaff] : allStaff;
     } else {
       // Regular restaurant owners/managers see their restaurant's staff
       // Use the user's restaurantId directly from the user document
@@ -54,9 +48,9 @@ exports.getStaff = async (req, res, next) => {
       .sort({ createdAt: -1 });
     }
 
-    // Count pending invitations for this restaurant
+    // Count pending invitations for this restaurant (active workspace for platform admins)
     const pendingInvitations = await User.countDocuments({
-      restaurantId: req.user.restaurantId,
+      restaurantId: req.restaurantId,
       invitationAccepted: false
     });
 
@@ -88,6 +82,13 @@ exports.addStaff = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'Please provide name, email, password, and role'
+      });
+    }
+
+    if (!req.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No restaurant context — select an active restaurant workspace first'
       });
     }
 
@@ -154,23 +155,11 @@ exports.updateStaff = async (req, res, next) => {
   try {
     const { name, email, role, isActive } = req.body;
 
-    // Check if the logged-in user is Mohammed Khan (super owner)
-    const isMohammedKhan = req.user.name.toLowerCase().includes('mohammed') ||
-                          req.user.email.toLowerCase().includes('mohammed');
-
     // Find staff member
-    let staff;
-
-    if (isMohammedKhan) {
-      // Mohammed Khan can update any staff from any restaurant
-      staff = await User.findById(req.params.id);
-    } else {
-      // Regular owners/managers can only update staff from their own restaurant
-      staff = await User.findOne({
-        _id: req.params.id,
-        restaurantId: req.restaurantId
-      });
-    }
+    const staff = await User.findOne({
+      _id: req.params.id,
+      restaurantId: req.restaurantId
+    });
 
     if (!staff) {
       return res.status(404).json({
@@ -228,22 +217,10 @@ exports.updateStaff = async (req, res, next) => {
 // @access  Private (Owner only)
 exports.deleteStaff = async (req, res, next) => {
   try {
-    // Check if the logged-in user is Mohammed Khan (super owner)
-    const isMohammedKhan = req.user.name.toLowerCase().includes('mohammed') ||
-                          req.user.email.toLowerCase().includes('mohammed');
-
-    let staff;
-
-    if (isMohammedKhan) {
-      // Mohammed Khan can delete any staff from any restaurant
-      staff = await User.findById(req.params.id);
-    } else {
-      // Regular owners can only delete staff from their own restaurant
-      staff = await User.findOne({
-        _id: req.params.id,
-        restaurantId: req.restaurantId
-      });
-    }
+    const staff = await User.findOne({
+      _id: req.params.id,
+      restaurantId: req.restaurantId
+    });
 
     if (!staff) {
       return res.status(404).json({

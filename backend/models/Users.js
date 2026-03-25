@@ -6,7 +6,16 @@ const userSchema = new mongoose.Schema({
   restaurantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
-    required: [true, 'User must be associated with a restaurant']
+    required: function() {
+      return this.role !== 'super_owner' && this.role !== 'platform_admin';
+    }
+  },
+  managedRestaurantIds: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Restaurant'
+    }],
+    default: []
   },
   name: {
     type: String,
@@ -32,7 +41,7 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['owner', 'manager', 'staff'],
+    enum: ['platform_admin', 'super_owner', 'owner', 'manager', 'staff'],
     default: 'staff'
   },
   permissions: {
@@ -132,12 +141,21 @@ userSchema.pre('save', function(next) {
     };
   } else if (this.role === 'staff') {
     this.permissions = {
-      canManageMenu: true,
-      canManageIngredients: true,
+      canManageMenu: false,
+      canManageIngredients: false,
       canManageAllergens: true,
       canViewReports: false,
       canManageStaff: false
     };
+  } else if (this.role === 'super_owner' || this.role === 'platform_admin') {
+    this.permissions = {
+      canManageMenu: true,
+      canManageIngredients: true,
+      canManageAllergens: true,
+      canViewReports: true,
+      canManageStaff: true
+    };
+    this.invitationAccepted = true;
   }
   next();
 });

@@ -1,6 +1,11 @@
 const User = require('../models/Users');
 const Restaurant = require('../models/Restaurant');
 const QRCode = require('qrcode');
+const { getEffectivePermissions } = require('../utils/permissions');
+const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'super_owner';
+const normalizeRole = (role) => (isPlatformAdminRole(role) ? 'platform_admin' : role);
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
 // @desc    Register restaurant and owner account
 // @route   POST /api/auth/register
@@ -22,8 +27,35 @@ exports.register = async (req, res, next) => {
       ownerPassword
     } = req.body;
 
+    if (
+      !isNonEmptyString(restaurantName) ||
+      !isNonEmptyString(restaurantEmail) ||
+      !isNonEmptyString(restaurantPhone) ||
+      !isNonEmptyString(cuisineType) ||
+      !isNonEmptyString(street) ||
+      !isNonEmptyString(city) ||
+      !isNonEmptyString(postcode) ||
+      !isNonEmptyString(ownerName) ||
+      !isNonEmptyString(ownerEmail) ||
+      !isNonEmptyString(ownerPassword)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields as valid text values'
+      });
+    }
+
+    const normalizedRestaurantEmail = restaurantEmail.trim().toLowerCase();
+    const normalizedOwnerEmail = ownerEmail.trim().toLowerCase();
+    if (!isValidEmail(normalizedRestaurantEmail) || !isValidEmail(normalizedOwnerEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide valid email addresses'
+      });
+    }
+
     // Check if restaurant email already exists
-    const restaurantExists = await Restaurant.findOne({ email: restaurantEmail });
+    const restaurantExists = await Restaurant.findOne({ email: normalizedRestaurantEmail });
     if (restaurantExists) {
       return res.status(400).json({
         success: false,
@@ -32,7 +64,7 @@ exports.register = async (req, res, next) => {
     }
 
     // Check if owner email already exists
-    const userExists = await User.findOne({ email: ownerEmail });
+    const userExists = await User.findOne({ email: normalizedOwnerEmail });
     if (userExists) {
       return res.status(400).json({
         success: false,
@@ -43,7 +75,7 @@ exports.register = async (req, res, next) => {
     // Create restaurant
     const restaurant = await Restaurant.create({
       name: restaurantName,
-      email: restaurantEmail,
+      email: normalizedRestaurantEmail,
       phone: restaurantPhone,
       cuisineType,
       address: {
@@ -58,11 +90,17 @@ exports.register = async (req, res, next) => {
     restaurant.qrCode = qrCodeUrl;
     await restaurant.save();
 
+    // New restaurants appear immediately for platform admins (managed workspaces)
+    await User.updateMany(
+      { role: { $in: ['platform_admin', 'super_owner'] } },
+      { $addToSet: { managedRestaurantIds: restaurant._id } }
+    );
+
     // Create owner user account
     const user = await User.create({
       restaurantId: restaurant._id,
       name: ownerName,
-      email: ownerEmail,
+      email: normalizedOwnerEmail,
       password: ownerPassword,
       role: 'owner',
       invitationAccepted: true // Owners don't need to accept invitations
@@ -79,7 +117,8 @@ exports.register = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        role: normalizeRole(user.role),
+        permissions: getEffectivePermissions(user),
         restaurantId: restaurant._id,
         restaurantName: restaurant.name,
         qrCode: restaurant.qrCode // 🆕 Include QR code in response
@@ -97,16 +136,30 @@ exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Validate email & password
-    if (!email || !password) {
+    // Validate email & password and block object-based injections
+    if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
       return res.status(400).json({
         success: false,
         message: 'Please provide an email and password'
       });
     }
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isValidEmail(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid email address'
+      });
+    }
 
     // Check for user (include password field)
-    const user = await User.findOne({ email }).select('+password').populate('restaurantId', 'name qrCode');
+    let userQuery = User.findOne({ email: normalizedEmail }).select('+password');
+    if (typeof userQuery.populate === 'function') {
+      userQuery = userQuery.populate('restaurantId', 'name qrCode');
+      if (typeof userQuery.populate === 'function') {
+        userQuery = userQuery.populate('managedRestaurantIds', 'name qrCode');
+      }
+    }
+    const user = await userQuery;
 
     if (!user) {
       return res.status(401).json({
@@ -140,6 +193,13 @@ exports.login = async (req, res, next) => {
     // Generate JWT token
     const token = user.getSignedJwtToken();
 
+    const managedRestaurants = (user.managedRestaurantIds || []).map((r) => ({
+      id: r._id,
+      name: r.name,
+      qrCode: r.qrCode
+    }));
+    const activeRestaurant = user.restaurantId || user.managedRestaurantIds?.[0] || null;
+
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -148,11 +208,12 @@ exports.login = async (req, res, next) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
-        permissions: user.permissions,
-        restaurantId: user.restaurantId._id,
-        restaurantName: user.restaurantId.name,
-        qrCode: user.restaurantId.qrCode,
+        role: normalizeRole(user.role),
+        permissions: getEffectivePermissions(user),
+        restaurantId: activeRestaurant?._id || null,
+        restaurantName: activeRestaurant?.name || '',
+        qrCode: activeRestaurant?.qrCode || '',
+        managedRestaurants,
         profilePicture: user.profilePicture,
         invitationAccepted: user.invitationAccepted
       }
@@ -167,11 +228,24 @@ exports.login = async (req, res, next) => {
 // @access  Private
 exports.getMe = async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.id).populate('restaurantId', 'name email logo qrCode');
+    const user = await User.findById(req.user.id)
+      .populate('restaurantId', 'name email logo qrCode')
+      .populate('managedRestaurantIds', 'name email logo qrCode');
 
     res.status(200).json({
       success: true,
-      data: user
+      data: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: normalizeRole(user.role),
+        permissions: getEffectivePermissions(user),
+        isActive: user.isActive,
+        invitationAccepted: user.invitationAccepted,
+        profilePicture: user.profilePicture,
+        restaurantId: user.restaurantId,
+        managedRestaurantIds: user.managedRestaurantIds
+      }
     });
   } catch (error) {
     next(error);
@@ -241,6 +315,121 @@ exports.updateProfile = async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Get restaurants current user can access
+// @route   GET /api/auth/my-restaurants
+// @access  Private
+exports.getMyRestaurants = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.id)
+      .populate('managedRestaurantIds', 'name qrCode isActive')
+      .populate('restaurantId', 'name qrCode isActive');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    let restaurants = [];
+    if (isPlatformAdminRole(user.role)) {
+      // All restaurants in the system — stays in sync when new venues register (no stale managed list)
+      const allRestaurants = await Restaurant.find({})
+        .select('name qrCode isActive')
+        .sort({ name: 1 })
+        .lean();
+      restaurants = allRestaurants.map((r) => ({
+        id: r._id,
+        name: r.name,
+        qrCode: r.qrCode,
+        isActive: r.isActive
+      }));
+    } else if (user.restaurantId) {
+      restaurants = [{
+        id: user.restaurantId._id,
+        name: user.restaurantId.name,
+        qrCode: user.restaurantId.qrCode,
+        isActive: user.restaurantId.isActive
+      }];
+    }
+
+    res.status(200).json({
+      success: true,
+      count: restaurants.length,
+      data: restaurants
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Validate and switch active restaurant context for current session
+// @route   POST /api/auth/switch-restaurant
+// @access  Private
+exports.switchRestaurant = async (req, res, next) => {
+  try {
+    const { restaurantId } = req.body;
+
+    if (!restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'restaurantId is required'
+      });
+    }
+
+    const user = await User.findById(req.user.id).populate('managedRestaurantIds', 'name qrCode');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (!isPlatformAdminRole(user.role)) {
+      const ownRestaurantId = user.restaurantId?.toString();
+      if (!ownRestaurantId || ownRestaurantId !== restaurantId) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this restaurant'
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: user.restaurantId,
+          name: null,
+          qrCode: null
+        }
+      });
+    }
+
+    const target = await Restaurant.findById(restaurantId).select('name qrCode');
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        message: 'Restaurant not found'
+      });
+    }
+
+    // Keep currently selected context on user record for convenience.
+    if (!user.restaurantId || user.restaurantId.toString() !== target._id.toString()) {
+      user.restaurantId = target._id;
+      await user.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        id: target._id,
+        name: target.name,
+        qrCode: target.qrCode
       }
     });
   } catch (error) {

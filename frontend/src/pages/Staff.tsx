@@ -11,6 +11,9 @@ import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import NotificationBell from '../components/NotificationBell';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
 
 interface StaffMember {
   _id: string;
@@ -74,11 +77,17 @@ const Staff: React.FC = () => {
   const isMohammedKhan = userName.toLowerCase().includes('mohammed') || 
                         userEmail.toLowerCase().includes('mohammed');
   
-  const getRoleLabel = (role: string) => {
-    return role.charAt(0).toUpperCase() + role.slice(1);
-  };
-  const canManageStaff = userRole === 'owner' || userRole === 'manager' || isMohammedKhan;
-  const canInviteStaff = userRole === 'owner' || userRole === 'manager';
+  const canManageStaff =
+    userRole === 'owner' ||
+    userRole === 'manager' ||
+    userRole === 'platform_admin' ||
+    userRole === 'super_owner' ||
+    isMohammedKhan;
+  const canInviteStaff =
+    userRole === 'owner' ||
+    userRole === 'manager' ||
+    userRole === 'platform_admin' ||
+    userRole === 'super_owner';
 
   const [inviteForm, setInviteForm] = useState({
     name: '',
@@ -315,39 +324,11 @@ const Staff: React.FC = () => {
 
       {/* Top Navigation Bar */}
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-4">
-          {/* Logo and Title - Only logo is clickable */}
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Go to Dashboard"
-            >
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
-              </svg>
-            </button>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Staff Management</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AppHeaderBranding title="Smart Menu" subtitle="Staff Management" />
           </div>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search staff..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-          </div>
+          <WorkspaceContextBar restaurantName={restaurantName} />
 
           {/* Actions and Profile */}
           <div className="flex items-center space-x-4">
@@ -366,7 +347,7 @@ const Staff: React.FC = () => {
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
         {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
+        <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           {/* Navigation */}
           <nav className="p-6 flex flex-col flex-1 justify-between">
             <div className="space-y-2">
@@ -475,7 +456,7 @@ const Staff: React.FC = () => {
                   <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">
                     {userName}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate capitalize">{getRoleLabel(userRole)}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{formatRoleLabel(userRole)}</p>
                 </div>
               </div>
               <button
@@ -665,7 +646,7 @@ const Staff: React.FC = () => {
                                 )}
                                 <td className="py-4 px-4">
                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(staff.role)}`}>
-                                    {getRoleLabel(staff.role)}
+                                    {formatRoleLabel(staff.role)}
                                   </span>
                                 </td>
                                 <td className="py-4 px-4">

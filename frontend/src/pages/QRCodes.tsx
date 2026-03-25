@@ -1,5 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import QRCodeLib from 'qrcode';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ProfileDropdown from '../components/ProfileDropdown';
@@ -8,6 +10,114 @@ import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
 import { qrService } from '../services/qrService';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
+
+/** Cached PNG data URL — never use `qrCode` for this (that key is the public menu URL for auth). */
+const QR_IMAGE_STORAGE_KEY = 'smartMenuQrImage';
+
+function readCachedQrImage(): string {
+  const raw = localStorage.getItem(QR_IMAGE_STORAGE_KEY);
+  return raw?.startsWith('data:image/') ? raw : '';
+}
+
+function readCachedMenuUrl(): string {
+  const direct = localStorage.getItem('qrCodeUrl');
+  if (direct?.startsWith('http')) return direct;
+  const legacy = localStorage.getItem('qrCode');
+  if (legacy?.startsWith('http')) return legacy;
+  return '';
+}
+
+/** Earlier builds stored a huge data URL under `qrCode`, breaking quota and the rest of the app. */
+function repairCorruptedQrStorage() {
+  const q = localStorage.getItem('qrCode');
+  if (q?.startsWith('data:image')) {
+    localStorage.removeItem('qrCode');
+  }
+}
+
+function isLoopbackPublicUrl(url: string): boolean {
+  if (!url || !url.includes('://')) return false;
+  try {
+    const u = new URL(url.trim());
+    const h = u.hostname.toLowerCase();
+    return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(url);
+  }
+}
+
+/**
+ * If the saved "website" is loopback but API base is a real public URL (e.g. ngrok),
+ * the QR would encode 127.0.0.1 and fail on phones. Align website with API origin.
+ */
+function reconcilePublicUrlPair(website: string, api: string): { website: string; api: string } {
+  const w = website.trim().replace(/\/$/, '');
+  let a = api.trim().replace(/\/$/, '');
+  if (!isLoopbackPublicUrl(w)) {
+    return { website: w, api: a };
+  }
+  if (!a.startsWith('http://') && !a.startsWith('https://')) {
+    return { website: w, api: a };
+  }
+  try {
+    const apiUrl = new URL(a);
+    const origin = `${apiUrl.protocol}//${apiUrl.host}`;
+    if (isLoopbackPublicUrl(origin)) {
+      return { website: w, api: a };
+    }
+    const path = (apiUrl.pathname || '').replace(/\/$/, '') || '';
+    let newWebsite = origin;
+    let newApi = a;
+    if (path === '/api' || path.endsWith('/api')) {
+      newWebsite = a.replace(/\/api\/?$/i, '').replace(/\/$/, '') || origin;
+      newApi = `${newWebsite}/api`;
+    } else if (!path || path === '/') {
+      newWebsite = origin;
+      newApi = `${origin}/api`;
+    } else {
+      newWebsite = origin;
+      newApi = `${origin}/api`;
+    }
+    return { website: newWebsite, api: newApi };
+  } catch {
+    return { website: w, api: a };
+  }
+}
+
+/** Optional: set in `.env.local` so QR defaults to your tunnel without pasting each time (ngrok free URLs change when you restart ngrok). */
+function envDefaultWebsite(): string | null {
+  const v = process.env.REACT_APP_DEFAULT_PUBLIC_WEBSITE_URL;
+  return v?.trim().startsWith('http') ? v.trim().replace(/\/$/, '') : null;
+}
+
+function envDefaultApi(): string | null {
+  const v = process.env.REACT_APP_DEFAULT_PUBLIC_API_BASE_URL;
+  return v?.trim().startsWith('http') ? v.trim().replace(/\/$/, '') : null;
+}
+
+function initialPublicUrlPair(): { website: string; api: string } {
+  const envW = envDefaultWebsite();
+  const envA = envDefaultApi();
+  if (envW) {
+    const w = envW.replace(/\/$/, '');
+    const a = (envA || `${w}/api`).replace(/\/$/, '');
+    return reconcilePublicUrlPair(w, a);
+  }
+  let website = window.location.origin.replace(/\/$/, '');
+  const savedW = localStorage.getItem('publicBaseUrl');
+  if (savedW?.trim().startsWith('http')) {
+    website = savedW.trim().replace(/\/$/, '');
+  }
+  let api = `${window.location.origin.replace(/\/$/, '')}/api`;
+  const savedA = localStorage.getItem('publicApiBaseUrl');
+  if (savedA?.trim().startsWith('http')) {
+    api = savedA.trim().replace(/\/$/, '');
+  }
+  return reconcilePublicUrlPair(website, api);
+}
 
 const QRCodes: React.FC = () => {
   const navigate = useNavigate();
@@ -17,34 +127,44 @@ const QRCodes: React.FC = () => {
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
-  const [qrCodeImage, setQrCodeImage] = useState<string>(localStorage.getItem('qrCode') || '');
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>(localStorage.getItem('qrCodeUrl') || '');
+  const [qrCodeImage, setQrCodeImage] = useState<string>(() => {
+    repairCorruptedQrStorage();
+    return readCachedQrImage();
+  });
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>(readCachedMenuUrl);
   const [qrLoading, setQrLoading] = useState(false);
-  const [publicBaseUrl, setPublicBaseUrl] = useState<string>(() => {
-    const saved = localStorage.getItem('publicBaseUrl');
-    if (saved) return saved;
-    return window.location.origin;
-  });
-  const [publicApiBaseUrl, setPublicApiBaseUrl] = useState<string>(() => {
-    const saved = localStorage.getItem('publicApiBaseUrl');
-    if (saved) return saved;
-    return `${window.location.protocol}//${window.location.hostname}:5002/api`;
-  });
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
   const [size, setSize] = useState('Large (300x300)');
   const [format, setFormat] = useState('PNG');
-  const [includeLogo, setIncludeLogo] = useState(true);
+  /** Default off — a centre logo overlay blocks QR modules and breaks most phone cameras. */
+  const [includeLogo, setIncludeLogo] = useState(false);
   const [color, setColor] = useState('#000000');
   const [scanAnalytics, setScanAnalytics] = useState<{ date: string; label: string; count: number }[]>([]);
   const [scanSummary, setScanSummary] = useState<{ totalScansLast30?: number }>({});
-  const isFirstUrlChange = useRef(true);
   const isFirstSizeColor = useRef(true);
 
-  const displayRole = useMemo(
-    () => userRole.charAt(0).toUpperCase() + userRole.slice(1),
-    [userRole]
-  );
+  const initialUrls = initialPublicUrlPair();
+  const [publicWebsiteUrl] = useState<string>(initialUrls.website);
+  const [publicApiBaseUrl] = useState<string>(initialUrls.api);
+
+  /** Build the QR image in the browser from the exact URL string so the code always matches the link. */
+  const renderQrDataUrl = async (menuUrl: string, width: number, colorHex: string): Promise<string | null> => {
+    if (!menuUrl.startsWith('http')) return null;
+    try {
+      return await QRCodeLib.toDataURL(menuUrl, {
+        width,
+        margin: 2,
+        errorCorrectionLevel: 'H',
+        color: { dark: colorHex || '#000000', light: '#FFFFFF' }
+      });
+    } catch (e) {
+      console.error('QR render failed', e);
+      return null;
+    }
+  };
+
+  const displayRole = formatRoleLabel(userRole);
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -72,23 +192,45 @@ const QRCodes: React.FC = () => {
   };
 
   const generateQRCode = async () => {
+    const base = publicWebsiteUrl.trim().replace(/\/$/, '');
+    const apiBase = publicApiBaseUrl.trim().replace(/\/$/, '');
+    if (!base.startsWith('http://') && !base.startsWith('https://')) {
+      toast.error('Public website URL must start with http:// or https://');
+      return;
+    }
+    if (!apiBase.startsWith('http://') && !apiBase.startsWith('https://')) {
+      toast.error('Public API base URL must start with http:// or https://');
+      return;
+    }
     try {
       setQrLoading(true);
       const width = sizeToWidth[size] ?? 300;
-      const response = await qrService.generateQR(publicBaseUrl, publicApiBaseUrl, {
+      const response = await qrService.generateQR(base, apiBase, {
         width,
         color: color || undefined
       });
-      const nextQrImage = response?.qrCodeImage || '';
       const nextQrUrl = response?.qrCodeUrl || '';
+      const serverImage = response?.qrCodeImage || '';
+      const clientImage = await renderQrDataUrl(nextQrUrl, width, color);
+      const nextQrImage = clientImage || serverImage;
       setQrCodeImage(nextQrImage);
       setQrCodeUrl(nextQrUrl);
-      if (nextQrImage) localStorage.setItem('qrCode', nextQrImage);
-      if (nextQrUrl) localStorage.setItem('qrCodeUrl', nextQrUrl);
-      localStorage.setItem('publicBaseUrl', publicBaseUrl.replace(/\/$/, ''));
-      localStorage.setItem('publicApiBaseUrl', publicApiBaseUrl.replace(/\/$/, ''));
+      if (nextQrUrl) {
+        localStorage.setItem('qrCode', nextQrUrl);
+        localStorage.setItem('qrCodeUrl', nextQrUrl);
+      }
+      if (nextQrImage) {
+        try {
+          localStorage.setItem(QR_IMAGE_STORAGE_KEY, nextQrImage);
+        } catch {
+          toast.error('Could not cache QR image (storage full). It will still work until you leave this page.');
+        }
+      }
+      localStorage.setItem('publicBaseUrl', base);
+      localStorage.setItem('publicApiBaseUrl', apiBase);
     } catch (error) {
       console.error('Error generating QR code:', error);
+      toast.error('Could not generate QR code. Check your connection and try again.');
     } finally {
       setQrLoading(false);
     }
@@ -99,25 +241,13 @@ const QRCodes: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // When user changes the public URLs, regenerate the QR so it always matches
-  useEffect(() => {
-    if (isFirstUrlChange.current) {
-      isFirstUrlChange.current = false;
-      return;
-    }
-    const t = setTimeout(() => generateQRCode(), 800);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [publicBaseUrl, publicApiBaseUrl]);
-
-  // When size or color changes, regenerate the QR (skip first run to avoid double generate on load)
   useEffect(() => {
     if (isFirstSizeColor.current) {
       isFirstSizeColor.current = false;
       return;
     }
     if (!qrCodeUrl) return;
-    const t = setTimeout(() => generateQRCode(), 400);
+    const t = setTimeout(() => generateQRCode(), 450);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size, color]);
@@ -129,37 +259,11 @@ const QRCodes: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col qr-codes-page">
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Go to Dashboard"
-            >
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z" />
-              </svg>
-            </button>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">{t('smartMenu')}</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">QR Code Management</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AppHeaderBranding title={t('smartMenu')} subtitle="QR Code Management" />
           </div>
-
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search menu items..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-          </div>
+          <WorkspaceContextBar restaurantName={restaurantName} />
 
           <div className="flex items-center space-x-4">
             <NotificationBell />
@@ -169,7 +273,7 @@ const QRCodes: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+        <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
               <button onClick={() => navigate('/dashboard')} className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition">
@@ -249,68 +353,25 @@ const QRCodes: React.FC = () => {
           <div className="p-8">
             <div className="mb-6">
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white">QR Code Management</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Generate QR codes for dine-in menu access</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Clean, ready-to-print QR for menu access</p>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-              <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Your Restaurant QR Code</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">Customers scan this to view your menu. Works from any network when using a public URL (e.g. ngrok).</p>
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+              <div className="xl:col-span-2 self-start bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Your Restaurant QR Code</h3>
 
-                <div className="hidden print:hidden">
-                  <h4 className="text-sm font-semibold text-green-800 dark:text-green-200 mb-2">To use on your phone (same Wi‑Fi)</h4>
-                  <ol className="text-xs text-green-700 dark:text-green-300 space-y-1 list-decimal list-inside">
-                    <li>Get your computer’s IP (e.g. Mac: run <code className="bg-green-100 dark:bg-gray-700 px-1 rounded">ipconfig getifaddr en0</code>).</li>
-                    <li>Set <strong>Public app URL</strong> and <strong>Public API URL</strong> below using that IP.</li>
-                    <li>The QR updates automatically; or click <strong>Regenerate</strong>.</li>
-                    <li>Connect your phone to the <strong>same Wi‑Fi</strong> and scan the QR.</li>
-                  </ol>
-                </div>
+                {qrLoading ? (
+                  <p className="mb-3 text-xs font-medium text-emerald-700 dark:text-emerald-400">Updating QR…</p>
+                ) : null}
 
-                <div className="w-full max-w-xl mb-6 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-                      Public app URL for QR
-                    </label>
-                    <input
-                      type="text"
-                      value={publicBaseUrl}
-                      onChange={(e) => setPublicBaseUrl(e.target.value)}
-                      placeholder="http://192.168.x.x:3000"
-                      className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg"
-                    />
-                    {publicBaseUrl.includes('localhost') && (
-                      <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
-                        localhost works only on this computer. Use your laptop IP for phone scanning.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-                      Public API URL for menu data
-                    </label>
-                    <input
-                      type="text"
-                      value={publicApiBaseUrl}
-                      onChange={(e) => setPublicApiBaseUrl(e.target.value)}
-                      placeholder="http://192.168.x.x:5002/api"
-                      className="w-full px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg"
-                    />
-                    {publicApiBaseUrl.includes('localhost') && (
-                      <div className="mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                        <p className="text-xs font-medium text-red-700 dark:text-red-400">
-                          Phones cannot use localhost. Use your laptop IP (e.g. http://192.168.1.x:5002/api) or an ngrok URL, then the QR will update automatically.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <div className="w-full max-w-xl mb-4" />
 
                 <div className="flex flex-col items-center">
-                  <div className="relative w-44 h-44 rounded-xl border-2 border-green-500 bg-white flex items-center justify-center p-2">
+                  <div className="relative w-52 h-52 rounded-2xl border border-green-200 dark:border-green-800 bg-gradient-to-b from-green-50 to-white dark:from-gray-800 dark:to-gray-800 flex items-center justify-center p-4 shadow-sm">
+                    <div className="w-full h-full rounded-xl border border-white bg-white p-2 shadow-sm">
                     {qrCodeImage ? (
                       <>
-                        <img src={qrCodeImage} alt="Restaurant QR Code" className="w-full h-full object-contain" />
+                        <img src={qrCodeImage} alt="Restaurant QR Code" className="w-full h-full object-contain rounded-lg" />
                         {includeLogo && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="w-10 h-10 rounded-lg bg-white border-2 border-green-500 flex items-center justify-center shadow-sm">
@@ -363,16 +424,24 @@ const QRCodes: React.FC = () => {
                         <rect x="67" y="106" width="6" height="6" fill="#000" />
                       </svg>
                     )}
+                    </div>
                   </div>
-                  <p className="mt-4 font-semibold text-gray-800 dark:text-white">{restaurantName} Menu</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 break-all text-center">
-                    {qrCodeUrl || 'Generating menu link...'}
+                  <p className="mt-5 font-semibold text-gray-800 dark:text-white text-lg">{restaurantName} Menu</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Scan to view menu</p>
+                  <p className="mt-2 max-w-md text-center text-[11px] text-gray-600 dark:text-gray-400">
+                    If a logo is turned on in the options below, it sits on top of the code and can stop phones from scanning — leave it off unless you&apos;re sure.
                   </p>
 
                   <div className="mt-5 flex flex-wrap gap-2 justify-center">
                     <button
-                      onClick={() => qrService.downloadQR(publicBaseUrl, publicApiBaseUrl)}
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition flex items-center gap-2"
+                      onClick={() =>
+                        qrService.downloadQR(
+                          publicWebsiteUrl.trim().replace(/\/$/, ''),
+                          publicApiBaseUrl.trim().replace(/\/$/, '')
+                        )
+                      }
+                      disabled={qrLoading}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-50"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12" />
@@ -389,23 +458,17 @@ const QRCodes: React.FC = () => {
                       Print QR Code
                     </button>
                     <button
-                      onClick={generateQRCode}
+                      type="button"
+                      onClick={() => generateQRCode()}
                       disabled={qrLoading}
-                      className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-60"
+                      title="Fetch the latest menu URL from the server and redraw the QR"
+                      className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-600"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      {qrLoading ? 'Generating...' : 'Regenerate'}
+                      {qrLoading ? 'Working…' : 'Regenerate'}
                     </button>
-                    {qrCodeUrl && (
-                      <button
-                        onClick={() => window.open(qrCodeUrl, '_blank')}
-                        className="px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-medium transition"
-                      >
-                        Open Menu Link
-                      </button>
-                    )}
                   </div>
 
                   {/* Print-only: shown only in print preview */}
@@ -418,16 +481,11 @@ const QRCodes: React.FC = () => {
                       </>
                     )}
                   </div>
-                  {(publicBaseUrl.includes('ngrok') || publicApiBaseUrl.includes('ngrok')) && (
-                    <p className="mt-3 w-full max-w-xl text-xs text-gray-500 dark:text-gray-400">
-                      Using ngrok: keep the tunnel running. Visitors may see a one-time ngrok warning before the menu; to remove it, upgrade to a paid ngrok plan.
-                    </p>
-                  )}
                 </div>
               </div>
 
               <div className="space-y-6">
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
                   <h4 className="font-semibold text-gray-800 dark:text-white mb-4">How to Use</h4>
                   <div className="space-y-4">
                     {[
@@ -452,7 +510,7 @@ const QRCodes: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+                <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
                   <h4 className="font-semibold text-gray-800 dark:text-white">QR Code Scans</h4>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">Last 30 days</p>
                   <div className="grid grid-cols-2 gap-3">
@@ -479,8 +537,11 @@ const QRCodes: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
               <h4 className="font-semibold text-gray-800 dark:text-white">Customize QR Code</h4>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Size and colour update the QR automatically after a moment, or tap Regenerate.
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Size</label>
@@ -503,7 +564,7 @@ const QRCodes: React.FC = () => {
               <div className="mt-5 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Include Logo</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Show Smart Menu logo in center</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Overlay on the QR — often breaks scanning; off by default</p>
                 </div>
                 <button
                   type="button"
@@ -523,7 +584,7 @@ const QRCodes: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 no-print">
+            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 no-print">
               <h4 className="font-semibold text-gray-800 dark:text-white">Daily Scans</h4>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">QR code scan activity over the last 7 days (from today)</p>
               <div className="w-full h-56">

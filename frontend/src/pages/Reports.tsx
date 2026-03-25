@@ -7,6 +7,9 @@ import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
 
 interface MenuItemForReport {
   _id: string;
@@ -63,7 +66,7 @@ const Reports: React.FC = () => {
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const profilePicture = localStorage.getItem('profilePicture');
-  const displayRole = useMemo(() => userRole.charAt(0).toUpperCase() + userRole.slice(1), [userRole]);
+  const displayRole = formatRoleLabel(userRole);
 
   const maxAllergenValue = Math.max(...ALLERGEN_USAGE.map((x) => x.value), 1);
 
@@ -92,37 +95,11 @@ const Reports: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Go to Dashboard"
-            >
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z" />
-              </svg>
-            </button>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Reports & Analytics</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AppHeaderBranding title="Smart Menu" subtitle="Reports & Analytics" />
           </div>
-
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search menu items..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-          </div>
+          <WorkspaceContextBar restaurantName={restaurantName} />
 
           <div className="flex items-center space-x-4">
             <NotificationBell />
@@ -132,7 +109,7 @@ const Reports: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+        <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
               <button onClick={() => navigate('/dashboard')} className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition">

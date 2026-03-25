@@ -15,6 +15,10 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const activeRestaurantId = localStorage.getItem('activeRestaurantId');
+    if (activeRestaurantId) {
+      config.headers['x-restaurant-id'] = activeRestaurantId;
+    }
     return config;
   },
   (error) => Promise.reject(error)
@@ -32,8 +36,12 @@ api.interceptors.response.use(
       localStorage.removeItem('userName');
       localStorage.removeItem('restaurantName');
       localStorage.removeItem('restaurantId');
+      localStorage.removeItem('activeRestaurantId');
+      localStorage.removeItem('managedRestaurants');
       localStorage.removeItem('userRole');
       localStorage.removeItem('qrCode');
+      localStorage.removeItem('qrCodeUrl');
+      localStorage.removeItem('smartMenuQrImage');
       localStorage.removeItem('invitationAccepted');
       window.location.href = '/login';
     }

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import ProfileDropdown from '../components/ProfileDropdown';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
 
 interface MenuItem {
   _id: string;
@@ -10,18 +11,12 @@ interface MenuItem {
 }
 
 const AllergenComplianceReport: React.FC = () => {
-  const navigate = useNavigate();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const userName = localStorage.getItem('userName') || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
-  const [profilePicture, setProfilePicture] = useState<string | null>(null);
-
-  useEffect(() => {
-    const savedPic = localStorage.getItem('profilePicture');
-    if (savedPic) setProfilePicture(savedPic);
-  }, []);
+  const userEmail = localStorage.getItem('userEmail') || '';
 
   useEffect(() => {
     let cancelled = false;
@@ -63,21 +58,8 @@ const AllergenComplianceReport: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 no-print">
         <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/allergens')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Back to Allergens"
-            >
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Compliance Report</p>
-            </div>
-          </div>
+          <AppHeaderBranding title="Smart Menu" subtitle="Compliance Report" />
+          <WorkspaceContextBar restaurantName={restaurantName} />
           <div className="flex items-center gap-3">
             <button
               onClick={handlePrint}
@@ -88,7 +70,7 @@ const AllergenComplianceReport: React.FC = () => {
               </svg>
               Print report
             </button>
-            <ProfileDropdown userName={userName} userEmail="" restaurantName={restaurantName} />
+            <ProfileDropdown userName={userName} userEmail={userEmail} restaurantName={restaurantName} />
           </div>
         </div>
       </header>

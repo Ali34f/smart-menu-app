@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const morgan = require('morgan');
+const helmet = require('helmet');
 const path = require('path');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/error');
@@ -21,6 +22,7 @@ require('./models/Allergens');
 require('./models/Ingredient');
 require('./models/MenuItem');
 require('./models/Notification');
+require('./models/PublicOrder');
 
 // Initialize Express app
 const app = express();
@@ -28,6 +30,9 @@ const app = express();
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(helmet({
+  crossOriginResourcePolicy: false
+}));
 
 // Enable CORS for local dev + configured frontend URLs
 const configuredOrigins = [

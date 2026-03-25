@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { menuService } from '../services/menuService';
@@ -11,6 +11,12 @@ import NotificationBell from '../components/NotificationBell';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
+import { canCreateOrDeleteMenu, canEditMenuItems } from '../utils/permissions';
+import { restaurantService } from '../services/restaurantService';
+import { getCategoriesForCuisine } from '../utils/menuCategories';
 
 interface Allergen {
   _id?: string;
@@ -30,6 +36,8 @@ interface MenuItem {
   isAvailable: boolean;
 }
 
+type ColumnKey = 'select' | 'image' | 'name' | 'category' | 'price' | 'allergens' | 'status' | 'actions';
+
 const Menu: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,6 +51,21 @@ const Menu: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState('All Status');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>({
+    select: 56,
+    image: 96,
+    name: 260,
+    category: 180,
+    price: 110,
+    allergens: 220,
+    status: 150,
+    actions: 140
+  });
+  const [resizingColumn, setResizingColumn] = useState<ColumnKey | null>(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -61,12 +84,24 @@ const Menu: React.FC = () => {
     }
   }, []);
 
+  const [restaurantCuisineType, setRestaurantCuisineType] = useState<string>('Other');
+
+  useEffect(() => {
+    const loadRestaurantCuisine = async () => {
+      try {
+        const r = await restaurantService.getRestaurant();
+        setRestaurantCuisineType(r?.cuisineType || 'Other');
+      } catch (e) {
+        // Keep default if the restaurant request fails
+      }
+    };
+    loadRestaurantCuisine();
+  }, []);
+
   const categories = useMemo(() => {
-    const fromItems = Array.from(
-      new Set(menuItems.map((item) => item.category).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b));
-    return ['All Categories', ...fromItems];
-  }, [menuItems]);
+    const cats = getCategoriesForCuisine(restaurantCuisineType);
+    return ['All Categories', ...cats];
+  }, [restaurantCuisineType]);
   const statuses = ['All Status', 'Active', 'Inactive'];
 
   useEffect(() => {
@@ -76,6 +111,22 @@ const Menu: React.FC = () => {
   useEffect(() => {
     filterItems();
   }, [menuItems, searchQuery, selectedCategory, selectedStatus]);
+
+  useEffect(() => {
+    if (!categories.includes(selectedCategory)) {
+      setSelectedCategory('All Categories');
+    }
+  }, [categories, selectedCategory]);
+
+  useEffect(() => {
+    setSelectedItemIds((prevSelected) => {
+      const validIds = new Set(menuItems.map((item) => item._id));
+      const nextSelected = new Set(
+        Array.from(prevSelected).filter((id) => validIds.has(id))
+      );
+      return nextSelected.size === prevSelected.size ? prevSelected : nextSelected;
+    });
+  }, [menuItems]);
 
   const fetchMenuItems = async () => {
     try {
@@ -138,8 +189,30 @@ const Menu: React.FC = () => {
 
     setDeleteLoading(true);
     try {
-      await menuService.deleteItem(itemToDelete.id);
-      toast.success(`${itemToDelete.name} deleted`);
+      if (itemToDelete.id === '__bulk__') {
+        const selectedIds = Array.from(selectedItemIds);
+        const results = await Promise.allSettled(
+          selectedIds.map((id) => menuService.deleteItem(id))
+        );
+        const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
+        const failedCount = results.length - deletedCount;
+
+        if (deletedCount > 0) {
+          toast.success(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted`);
+        }
+        if (failedCount > 0) {
+          showError(`Could not delete ${failedCount} item${failedCount > 1 ? 's' : ''}`);
+        }
+        setSelectedItemIds(new Set());
+      } else {
+        await menuService.deleteItem(itemToDelete.id);
+        toast.success(`${itemToDelete.name} deleted`);
+        setSelectedItemIds((prevSelected) => {
+          const nextSelected = new Set(prevSelected);
+          nextSelected.delete(itemToDelete.id);
+          return nextSelected;
+        });
+      }
       setDeleteModalOpen(false);
       setItemToDelete(null);
       fetchMenuItems();
@@ -164,16 +237,103 @@ const Menu: React.FC = () => {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const currentItems = filteredItems.slice(startIndex, endIndex);
+  const selectedFilteredCount = filteredItems.filter((item) =>
+    selectedItemIds.has(item._id)
+  ).length;
+  const allFilteredSelected =
+    filteredItems.length > 0 && selectedFilteredCount === filteredItems.length;
+  const partiallyFilteredSelected =
+    selectedFilteredCount > 0 && selectedFilteredCount < filteredItems.length;
 
-  const hasAllergen = (item: MenuItem, type: string) => {
-    if (!item.allergens || item.allergens.length === 0) return false;
-    return item.allergens.some(allergen => {
-      const allergenName = typeof allergen === 'string' ? allergen : allergen.name || '';
-      return allergenName.toLowerCase().includes(type.toLowerCase());
-    });
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = partiallyFilteredSelected;
+    }
+  }, [partiallyFilteredSelected]);
+  useEffect(() => {
+    if (!resizingColumn) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - startX;
+      const nextWidth = Math.max(80, startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [resizingColumn]: nextWidth }));
+    };
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizingColumn, startWidth, startX]);
+
+  // Match Ingredients page allergen pill colors (same mapping + fallback).
+  const ALLERGEN_COLORS: Record<string, string> = {
+    Milk: 'bg-red-500',
+    Gluten: 'bg-orange-500',
+    Peanuts: 'bg-red-600',
+    'Tree Nuts': 'bg-purple-500',
+    Eggs: 'bg-amber-500',
+    Fish: 'bg-blue-500',
+    Shellfish: 'bg-teal-500',
+    Soy: 'bg-lime-600',
+    Sesame: 'bg-amber-700'
   };
 
-  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+  const normalizeAllergenGroup = (rawName: string): keyof typeof ALLERGEN_COLORS | 'Other' => {
+    const name = rawName.toLowerCase();
+    if (name.includes('gluten') || name.includes('wheat') || name.includes('barley') || name.includes('rye')) return 'Gluten';
+    if (name.includes('milk') || name.includes('dairy') || name.includes('lactose')) return 'Milk';
+    if (name.includes('peanut')) return 'Peanuts';
+    if (name.includes('tree nut') || name.includes('almond') || name.includes('cashew') || name.includes('hazelnut') || name.includes('walnut') || name.includes('pistachio')) {
+      return 'Tree Nuts';
+    }
+    if (name.includes('egg')) return 'Eggs';
+    if (name.includes('fish')) return 'Fish';
+    if (
+      name.includes('shellfish') ||
+      name.includes('crustace') ||
+      name.includes('mollusc') ||
+      name.includes('molluscs')
+    ) {
+      return 'Shellfish';
+    }
+    if (name.includes('soy')) return 'Soy';
+    if (name.includes('sesame')) return 'Sesame';
+    return 'Other';
+  };
+
+  const getAllergenBadges = (item: MenuItem) => {
+    const list = Array.isArray(item.allergens) ? item.allergens : [];
+    const seen = new Set<string>();
+    const out: Array<{ key: string; label: string; colorClass: string }> = [];
+    list.forEach((a) => {
+      const rawName = (typeof a === 'string' ? a : a?.name || '').trim();
+      if (!rawName) return;
+      const lower = rawName.toLowerCase();
+      if (seen.has(lower)) return;
+      seen.add(lower);
+      const group = normalizeAllergenGroup(rawName);
+      const colorClass = group === 'Other' ? 'bg-gray-500' : ALLERGEN_COLORS[group];
+      out.push({
+        key: typeof a === 'string' ? rawName : a?._id || rawName,
+        label: rawName,
+        colorClass
+      });
+    });
+    return out;
+  };
+
+  const displayRole = formatRoleLabel(userRole);
+  const allowCreateDelete = canCreateOrDeleteMenu();
+  const allowEdit = canEditMenuItems();
 
   const getCategoryBadgeClasses = (category: string) => {
     const normalized = category.toLowerCase();
@@ -183,6 +343,46 @@ const Menu: React.FC = () => {
     if (normalized.includes('drink')) return 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300';
     if (normalized.includes('side')) return 'bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300';
     return 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300';
+  };
+
+  const handleToggleItemSelection = (itemId: string) => {
+    setSelectedItemIds((prevSelected) => {
+      const nextSelected = new Set(prevSelected);
+      if (nextSelected.has(itemId)) {
+        nextSelected.delete(itemId);
+      } else {
+        nextSelected.add(itemId);
+      }
+      return nextSelected;
+    });
+  };
+
+  const handleToggleSelectAllFiltered = () => {
+    setSelectedItemIds((prevSelected) => {
+      const nextSelected = new Set(prevSelected);
+      if (allFilteredSelected) {
+        filteredItems.forEach((item) => nextSelected.delete(item._id));
+      } else {
+        filteredItems.forEach((item) => nextSelected.add(item._id));
+      }
+      return nextSelected;
+    });
+  };
+
+  const handleDeleteSelectedItems = () => {
+    if (selectedItemIds.size === 0) return;
+    setItemToDelete({
+      id: '__bulk__',
+      name: `${selectedItemIds.size} selected item${selectedItemIds.size > 1 ? 's' : ''}`,
+    });
+    setDeleteModalOpen(true);
+  };
+
+  const startColumnResize = (column: ColumnKey, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setResizingColumn(column);
+    setStartX(e.clientX);
+    setStartWidth(columnWidths[column]);
   };
 
   return (
@@ -200,41 +400,11 @@ const Menu: React.FC = () => {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Top Navigation Bar */}
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-4">
-          {/* Logo and Title - Only logo is clickable */}
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Go to Dashboard"
-            >
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
-              </svg>
-            </button>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">Smart Menu</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">Menu Items</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AppHeaderBranding title="Smart Menu" subtitle="Menu Items Management" />
           </div>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Search menu items..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-          </div>
+          <WorkspaceContextBar restaurantName={restaurantName} />
 
           {/* Notifications and Profile */}
           <div className="flex items-center space-x-4">
@@ -252,7 +422,7 @@ const Menu: React.FC = () => {
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
         {/* Sidebar */}
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
+        <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           <nav className="flex-1 p-6 flex flex-col justify-between">
             {/* Main Navigation */}
             <div className="space-y-2">
@@ -270,7 +440,7 @@ const Menu: React.FC = () => {
               {/* Menu Items - Active */}
               <button className="w-full flex items-center space-x-4 px-4 py-3 bg-green-500 text-white rounded-lg font-medium text-sm shadow-sm">
                 <Icon path={mdiSilverwareForkKnife} size={1} className="flex-shrink-0" />
-                <span className="flex-1 text-left">Menu Items</span>
+                <span className="flex-1 text-left">Menu Items Management</span>
               </button>
 
               {/* Allergens */}
@@ -386,18 +556,20 @@ const Menu: React.FC = () => {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Menu Items</h2>
+                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Menu Items Management</h2>
                 <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage your dishes, allergens, and availability</p>
               </div>
-              <button 
-                onClick={() => navigate('/menu-items/new')}
-                className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                <span>Add New Item</span>
-              </button>
+              {allowCreateDelete && (
+                <button 
+                  onClick={() => navigate('/menu-items/new')}
+                  className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span>Add New Item</span>
+                </button>
+              )}
             </div>
 
             {/* Filters */}
@@ -461,40 +633,133 @@ const Menu: React.FC = () => {
                   </button>
                 )}
               </div>
+
+              {allowCreateDelete && selectedItemIds.size > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {selectedItemIds.size} item{selectedItemIds.size > 1 ? 's' : ''} selected
+                  </p>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setSelectedItemIds(new Set())}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                    >
+                      Clear Selection
+                    </button>
+                    <button
+                      onClick={handleDeleteSelectedItems}
+                      className="px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition"
+                    >
+                      Delete Selected
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <div className="overflow-x-auto">
+              <table className="w-full table-fixed min-w-[1180px] divide-y divide-gray-200 dark:divide-gray-700">
+                <colgroup>
+                  {allowCreateDelete && <col style={{ width: `${columnWidths.select}px` }} />}
+                  <col style={{ width: `${columnWidths.image}px` }} />
+                  <col style={{ width: `${columnWidths.name}px` }} />
+                  <col style={{ width: `${columnWidths.category}px` }} />
+                  <col style={{ width: `${columnWidths.price}px` }} />
+                  <col style={{ width: `${columnWidths.allergens}px` }} />
+                  <col style={{ width: `${columnWidths.status}px` }} />
+                  <col style={{ width: `${columnWidths.actions}px` }} />
+                </colgroup>
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    {allowCreateDelete && (
+                      <th className="relative px-6 py-3 text-left">
+                        <input
+                          ref={selectAllRef}
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={handleToggleSelectAllFiltered}
+                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                          aria-label="Select all filtered menu items"
+                        />
+                        <button
+                          type="button"
+                          onMouseDown={(e) => startColumnResize('select', e)}
+                          className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                          aria-label="Resize select column"
+                        />
+                      </th>
+                    )}
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Image
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('image', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize image column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Dish Name
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('name', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize dish name column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Category
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('category', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize category column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Price
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('price', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize price column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Allergens
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('allergens', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize allergens column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Status
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('status', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize status column"
+                      />
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                    <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                       Actions
+                      <button
+                        type="button"
+                        onMouseDown={(e) => startColumnResize('actions', e)}
+                        className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                        aria-label="Resize actions column"
+                      />
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {currentItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center">
+                      <td colSpan={allowCreateDelete ? 8 : 7} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <svg className="w-16 h-16 text-gray-300 dark:text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -505,8 +770,22 @@ const Menu: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    currentItems.map((item) => (
+                    currentItems.map((item) => {
+                      const allergenBadges = getAllergenBadges(item);
+                      return (
                       <tr key={item._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                        {allowCreateDelete && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={selectedItemIds.has(item._id)}
+                              onChange={() => handleToggleItemSelection(item._id)}
+                              className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                              aria-label={`Select ${item.name}`}
+                            />
+                          </td>
+                        )}
+
                         {/* Image */}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
@@ -521,12 +800,12 @@ const Menu: React.FC = () => {
                         </td>
 
                         {/* Dish Name */}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <div className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</div>
                         </td>
 
                         {/* Category */}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4">
                           <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getCategoryBadgeClasses(item.category)}`}>
                             {item.category}
                           </span>
@@ -538,45 +817,55 @@ const Menu: React.FC = () => {
                         </td>
 
                         {/* Allergens */}
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-1">
-                            {hasAllergen(item, 'gluten') && (
-                              <span className="w-6 h-6 flex items-center justify-center bg-red-100 rounded text-sm" title="Contains Gluten">
-                                🌾
-                              </span>
-                            )}
-                            {hasAllergen(item, 'dairy') && (
-                              <span className="w-6 h-6 flex items-center justify-center bg-orange-100 rounded text-sm" title="Contains Dairy">
-                                🥛
-                              </span>
-                            )}
-                            {hasAllergen(item, 'nuts') && (
-                              <span className="w-6 h-6 flex items-center justify-center bg-yellow-100 rounded text-sm" title="Contains Nuts">
-                                🥜
-                              </span>
-                            )}
-                            {item.allergens && item.allergens.length === 0 && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
-                            )}
+                        <td className="px-6 py-4">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                              {allergenBadges.map((a) => (
+                                <span
+                                  key={a.key}
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold text-white ${a.colorClass}`}
+                                  title={a.label}
+                                >
+                                  {a.label}
+                                </span>
+                              ))}
+                              {allergenBadges.length === 0 && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+                              )}
                           </div>
                         </td>
 
                         {/* Status */}
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => handleToggleAvailability(item._id)}
-                            className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors hover:shadow-md"
-                            style={{
-                              backgroundColor: item.isAvailable ? '#dcfce7' : '#fee2e2',
-                              border: `2px solid ${item.isAvailable ? '#22c55e' : '#ef4444'}`
-                            }}
-                            title={`Click to mark as ${item.isAvailable ? 'inactive' : 'active'}`}
-                          >
-                            <div className={`w-2 h-2 rounded-full ${item.isAvailable ? 'bg-green-500' : 'bg-red-500'}`}></div>
-                            <span className={`text-sm font-medium ${item.isAvailable ? 'text-green-700' : 'text-red-700'}`}>
-                              {item.isAvailable ? 'Active' : 'Inactive'}
-                            </span>
-                          </button>
+                          {allowEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleAvailability(item._id)}
+                              className="flex items-center space-x-2 px-3 py-1.5 rounded-full transition-colors hover:shadow-md"
+                              style={{
+                                backgroundColor: item.isAvailable ? '#dcfce7' : '#fee2e2',
+                                border: `2px solid ${item.isAvailable ? '#22c55e' : '#ef4444'}`
+                              }}
+                              title={`Click to mark as ${item.isAvailable ? 'inactive' : 'active'}`}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${item.isAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className={`text-sm font-medium ${item.isAvailable ? 'text-green-700' : 'text-red-700'}`}>
+                                {item.isAvailable ? 'Active' : 'Inactive'}
+                              </span>
+                            </button>
+                          ) : (
+                            <div
+                              className="flex items-center space-x-2 px-3 py-1.5 rounded-full"
+                              style={{
+                                backgroundColor: item.isAvailable ? '#dcfce7' : '#fee2e2',
+                                border: `2px solid ${item.isAvailable ? '#22c55e' : '#ef4444'}`
+                              }}
+                            >
+                              <div className={`w-2 h-2 rounded-full ${item.isAvailable ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className={`text-sm font-medium ${item.isAvailable ? 'text-green-700' : 'text-red-700'}`}>
+                                {item.isAvailable ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         {/* Actions */}
@@ -595,33 +884,41 @@ const Menu: React.FC = () => {
                             </button>
 
                             {/* Edit */}
-                            <button
-                              onClick={() => navigate(`/menu-items/edit/${item._id}`)}
-                              className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
-                              title="Edit Item"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
+                            {allowEdit && (
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/menu-items/edit/${item._id}`)}
+                                className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition"
+                                title="Edit Item"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
 
                             {/* Delete */}
-                            <button
-                              onClick={() => handleDeleteItem(item._id, item.name)}
-                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                              title="Delete Item"
-                            >
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
+                            {allowCreateDelete && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteItem(item._id, item.name)}
+                                className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                title="Delete Item"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
+              </div>
 
               {/* Pagination */}
               {filteredItems.length > 0 && (

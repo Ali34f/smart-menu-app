@@ -17,16 +17,34 @@ router.use(protect);
 // POST /accept-invitation to PUT /:id with id="accept-invitation"
 router.post('/accept-invitation', acceptInvitation);
 
-// Get all staff - all authenticated roles can view
-router.get('/', authorize('owner', 'manager', 'staff'), getStaff);
+// Get all staff - all authenticated roles can view (incl. platform admins in workspace context)
+router.get(
+  '/',
+  authorize('owner', 'manager', 'staff', 'platform_admin', 'super_owner'),
+  getStaff
+);
 
-// Add staff - Owner and Manager can add
-router.post('/', authorize('owner', 'manager'), checkPermission('canManageStaff'), addStaff);
+// Add staff - Owner, Manager, Platform admin
+router.post(
+  '/',
+  authorize('owner', 'manager', 'platform_admin', 'super_owner'),
+  checkPermission('canManageStaff'),
+  addStaff
+);
 
-// Update staff - Owner and Manager can update
-router.put('/:id', authorize('owner', 'manager'), checkPermission('canManageStaff'), updateStaff);
+// Update staff - Owner, Manager, Platform admin
+router.put(
+  '/:id',
+  authorize('owner', 'manager', 'platform_admin', 'super_owner'),
+  checkPermission('canManageStaff'),
+  updateStaff
+);
 
-// Delete staff - Only Owner can delete
-router.delete('/:id', authorize('owner'), deleteStaff);
+// Delete staff - Owner or Platform admin
+router.delete(
+  '/:id',
+  authorize('owner', 'platform_admin', 'super_owner'),
+  deleteStaff
+);
 
 module.exports = router;

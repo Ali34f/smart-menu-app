@@ -19,6 +19,23 @@ interface LoginData {
 }
 
 export const authService = {
+  clearSession: () => {
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userName');
+    localStorage.removeItem('restaurantName');
+    localStorage.removeItem('restaurantId');
+    localStorage.removeItem('activeRestaurantId');
+    localStorage.removeItem('managedRestaurants');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('qrCode');
+    localStorage.removeItem('qrCodeUrl');
+    localStorage.removeItem('smartMenuQrImage');
+    localStorage.removeItem('profilePicture');
+    localStorage.removeItem('invitationAccepted');
+    localStorage.removeItem('userPermissions');
+  },
+
   register: async (data: RegisterData) => {
     const response = await api.post('/auth/register', data);
 
@@ -28,8 +45,12 @@ export const authService = {
       localStorage.setItem('userName', response.data.user.name || '');
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
       localStorage.setItem('restaurantId', response.data.user.restaurantId || '');
+      localStorage.setItem('activeRestaurantId', response.data.user.restaurantId || '');
       localStorage.setItem('userRole', response.data.user.role);
       localStorage.setItem('invitationAccepted', 'true');
+      if (response.data.user.permissions) {
+        localStorage.setItem('userPermissions', JSON.stringify(response.data.user.permissions));
+      }
     }
 
     return response.data;
@@ -44,8 +65,10 @@ export const authService = {
       localStorage.setItem('userName', response.data.user.name || '');
       localStorage.setItem('restaurantName', response.data.user.restaurantName);
       localStorage.setItem('restaurantId', response.data.user.restaurantId || '');
+      localStorage.setItem('activeRestaurantId', response.data.user.restaurantId || '');
       localStorage.setItem('userRole', response.data.user.role);
       localStorage.setItem('qrCode', response.data.user.qrCode || '');
+      localStorage.setItem('managedRestaurants', JSON.stringify(response.data.user.managedRestaurants || []));
 
       const invitationAccepted =
         response.data.user.invitationAccepted === false ? 'false' : 'true';
@@ -53,6 +76,9 @@ export const authService = {
 
       if (response.data.user.profilePicture) {
         localStorage.setItem('profilePicture', response.data.user.profilePicture);
+      }
+      if (response.data.user.permissions) {
+        localStorage.setItem('userPermissions', JSON.stringify(response.data.user.permissions));
       }
     }
 
@@ -65,15 +91,7 @@ export const authService = {
   },
 
   logout: () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userEmail');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('restaurantName');
-    localStorage.removeItem('restaurantId');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('qrCode');
-    localStorage.removeItem('profilePicture');
-    localStorage.removeItem('invitationAccepted');
+    authService.clearSession();
     window.location.href = '/login';
   },
 
@@ -114,5 +132,26 @@ export const authService = {
 
   getProfilePicture: () => {
     return localStorage.getItem('profilePicture');
+  },
+
+  getMyRestaurants: async () => {
+    const response = await api.get('/auth/my-restaurants');
+    return response.data;
+  },
+
+  switchRestaurant: async (restaurantId: string) => {
+    const response = await api.post('/auth/switch-restaurant', { restaurantId });
+    const data = response.data?.data;
+    if (data?.id) {
+      localStorage.setItem('activeRestaurantId', data.id);
+      localStorage.setItem('restaurantId', data.id);
+    }
+    if (data?.name) {
+      localStorage.setItem('restaurantName', data.name);
+    }
+    if (data?.qrCode) {
+      localStorage.setItem('qrCode', data.qrCode);
+    }
+    return response.data;
   }
 };

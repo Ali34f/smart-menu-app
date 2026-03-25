@@ -3,6 +3,7 @@ const fs = require('fs');
 const Restaurant = require('../models/Restaurant');
 const MenuItem = require('../models/MenuItem');
 const Allergen = require('../models/Allergens');
+const PublicOrder = require('../models/PublicOrder');
 
 // @desc    Get public menu by restaurant ID (for QR code scan)
 // @route   GET /api/public/menu/:restaurantId
@@ -12,7 +13,7 @@ exports.getPublicMenu = async (req, res, next) => {
     const { restaurantId } = req.params;
 
     // Get restaurant info
-    const restaurant = await Restaurant.findById(restaurantId).select('name cuisineType address');
+    const restaurant = await Restaurant.findById(restaurantId).select('name cuisineType address tableCount logo');
 
     if (!restaurant) {
       return res.status(404).json({
@@ -30,17 +31,26 @@ exports.getPublicMenu = async (req, res, next) => {
     .sort({ category: 1, name: 1 })
     .lean();
 
-    // Normalize image to path like "/uploads/filename" for frontend
+    // Normalize image:
+    // - keep external URLs as-is
+    // - normalize local upload URLs/paths to "/uploads/..."
     menuItems = menuItems.map((doc) => {
       if (doc.image && typeof doc.image === 'string') {
         try {
           if (doc.image.startsWith('http')) {
-            doc.image = new URL(doc.image).pathname; // e.g. /uploads/xyz.jpg
+            const parsed = new URL(doc.image);
+            const pathname = parsed.pathname || '';
+            if (pathname.startsWith('/uploads/')) {
+              doc.image = pathname; // local upload hosted by API
+            }
+            // external CDN/hosted images stay unchanged
           } else if (!doc.image.startsWith('/')) {
-            doc.image = '/' + doc.image;
+            doc.image = doc.image.startsWith('uploads/')
+              ? `/${doc.image}`
+              : doc.image;
           }
         } catch (_) {
-          doc.image = (doc.image || '').replace(/^https?:\/\/[^/]+/, '') || doc.image;
+          // If URL parsing fails, leave existing value unchanged
         }
       }
       return doc;
@@ -73,7 +83,7 @@ exports.getPublicMenu = async (req, res, next) => {
 exports.filterMenuByAllergens = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
-    const { allergenIds } = req.body; // Array of allergen IDs to exclude
+    const { allergenIds } = req.body; // Array of allergen ObjectIds to avoid (exclude any dish containing one)
 
     if (!allergenIds || !Array.isArray(allergenIds)) {
       return res.status(400).json({
@@ -82,14 +92,37 @@ exports.filterMenuByAllergens = async (req, res, next) => {
       });
     }
 
-    // Get menu items that DON'T contain the specified allergens
-    const menuItems = await MenuItem.find({
-      restaurantId,
-      isAvailable: true,
-      allergens: { $nin: allergenIds } // $nin = "not in"
-    })
-    .populate('allergens', 'name icon')
-    .sort({ category: 1, name: 1 });
+    const exclude = allergenIds.filter(Boolean);
+    const baseQuery = { restaurantId, isAvailable: true };
+    // $nin on an array field does not mean "no element in this list"; use $nor + $in
+    const query =
+      exclude.length > 0
+        ? { ...baseQuery, $nor: [{ allergens: { $in: exclude } }] }
+        : baseQuery;
+
+    let menuItems = await MenuItem.find(query)
+      .populate('allergens', 'name icon')
+      .sort({ category: 1, name: 1 })
+      .lean();
+
+    menuItems = menuItems.map((doc) => {
+      if (doc.image && typeof doc.image === 'string') {
+        try {
+          if (doc.image.startsWith('http')) {
+            const parsed = new URL(doc.image);
+            const pathname = parsed.pathname || '';
+            if (pathname.startsWith('/uploads/')) {
+              doc.image = pathname;
+            }
+          } else if (!doc.image.startsWith('/')) {
+            doc.image = doc.image.startsWith('uploads/')
+              ? `/${doc.image}`
+              : doc.image;
+          }
+        } catch (_) {}
+      }
+      return doc;
+    });
 
     res.status(200).json({
       success: true,
@@ -149,6 +182,118 @@ exports.getAllergens = async (req, res, next) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching allergens',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Create public order (demo checkout)
+// @route   POST /api/public/menu/:restaurantId/order
+// @access  Public
+exports.createPublicOrder = async (req, res, next) => {
+  try {
+    const { restaurantId } = req.params;
+    const { tableNumber, paymentMethod, items } = req.body || {};
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please add at least one item' });
+    }
+
+    const table = Number(tableNumber);
+    if (!Number.isInteger(table) || table < 1) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid table number' });
+    }
+
+    const method = String(paymentMethod || '').toLowerCase();
+    if (method !== 'cash' && method !== 'card') {
+      return res.status(400).json({ success: false, message: 'Payment method must be cash or card' });
+    }
+
+    const restaurant = await Restaurant.findById(restaurantId).select('name tableCount');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+
+    const maxTables = Number(restaurant.tableCount) > 0 ? Number(restaurant.tableCount) : 20;
+    if (table > maxTables) {
+      return res.status(400).json({
+        success: false,
+        message: `Table number must be between 1 and ${maxTables}`
+      });
+    }
+
+    const normalized = items
+      .map((line) => ({
+        menuItemId: String(line?.menuItemId || line?.itemId || ''),
+        quantity: Number(line?.quantity || 0)
+      }))
+      .filter((line) => line.menuItemId && Number.isFinite(line.quantity) && line.quantity > 0);
+
+    if (!normalized.length) {
+      return res.status(400).json({ success: false, message: 'Order items are invalid' });
+    }
+
+    const ids = normalized.map((line) => line.menuItemId);
+    const menuDocs = await MenuItem.find({
+      _id: { $in: ids },
+      restaurantId,
+      isAvailable: true
+    }).select('name price');
+
+    const menuMap = new Map(menuDocs.map((m) => [String(m._id), m]));
+    const orderItems = [];
+    for (const line of normalized) {
+      const doc = menuMap.get(line.menuItemId);
+      if (!doc) {
+        return res.status(400).json({ success: false, message: 'One or more selected items are unavailable' });
+      }
+      const qty = Math.max(1, Math.floor(line.quantity));
+      const unitPrice = Number(doc.price || 0);
+      orderItems.push({
+        menuItemId: doc._id,
+        name: doc.name,
+        unitPrice,
+        quantity: qty,
+        lineTotal: Number((unitPrice * qty).toFixed(2))
+      });
+    }
+
+    const totalAmount = Number(orderItems.reduce((sum, line) => sum + line.lineTotal, 0).toFixed(2));
+    const paymentStatus = method === 'card' ? 'paid_demo' : 'pending_cash';
+    const paymentReference =
+      method === 'card'
+        ? `DEMO-${Date.now().toString(36).toUpperCase()}`
+        : null;
+
+    const order = await PublicOrder.create({
+      restaurantId,
+      tableNumber: table,
+      paymentMethod: method,
+      paymentStatus,
+      paymentReference,
+      items: orderItems,
+      totalAmount,
+      status: 'placed'
+    });
+
+    res.status(201).json({
+      success: true,
+      message: method === 'card' ? 'Demo card payment approved' : 'Order placed - pay cash at staff desk',
+      data: {
+        orderId: order._id,
+        orderNumber: String(order._id).slice(-6).toUpperCase(),
+        tableNumber: order.tableNumber,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        paymentReference: order.paymentReference,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error creating order',
       error: error.message
     });
   }
