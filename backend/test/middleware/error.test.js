@@ -50,7 +50,7 @@ describe('Error Middleware', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
       success: false,
-      message: ['Name is required', 'Price must be positive'],
+      message: 'Name is required Price must be positive',
     });
   });
 
@@ -78,11 +78,14 @@ describe('Error Middleware', () => {
 
   it('returns 500 and error message for unknown errors', () => {
     const err = new Error('Something broke');
+    err.stack = 'STACK_SHOULD_NOT_LEAK';
     errorHandler(err, req, res, next);
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({
+    const payload = res.json.mock.calls[0][0];
+    expect(payload).toEqual({
       success: false,
       message: 'Something broke',
     });
+    expect(payload.stack).toBeUndefined();
   });
 });

@@ -37,6 +37,8 @@ describe('Auth Middleware', () => {
         _id: 'user123',
         isActive: true,
         restaurantId: 'rest456',
+        role: 'owner',
+        permissions: { canManageMenu: true, canManageIngredients: true },
       };
       jest.spyOn(jwt, 'verify').mockReturnValue({ id: 'user123' });
       jest.spyOn(User, 'findById').mockReturnValue({
@@ -46,8 +48,10 @@ describe('Auth Middleware', () => {
       req.headers.authorization = 'Bearer valid.token.here';
       await protect(req, res, next);
 
-      expect(req.user).toEqual(mockUser);
+      expect(req.user.role).toBe('owner');
       expect(req.restaurantId).toBe('rest456');
+      expect(req.user.permissions.canManageMenu).toBe(true);
+      expect(req.user.permissions.canEditMenu).toBe(true);
       expect(next).toHaveBeenCalled();
       jwt.verify.mockRestore();
       User.findById.mockRestore();

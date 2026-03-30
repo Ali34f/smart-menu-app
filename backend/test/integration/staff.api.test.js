@@ -1,15 +1,21 @@
 const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const User = require('../../models/Users');
+const Restaurant = require('../../models/Restaurant');
 const app = require('../../server');
 
 jest.mock('../../models/Users');
+jest.mock('../../models/Restaurant', () => ({
+  findById: jest.fn(),
+}));
 jest.mock('../../utils/notificationHelper', () => ({
   createNotification: jest.fn().mockResolvedValue(undefined),
 }));
 
 describe('Staff API', () => {
   let token;
+  /** Must be a valid ObjectId string for platform-admin workspace resolution */
+  const WORKSPACE_RESTAURANT_ID = '507f1f77bcf86cd799439011';
 
   beforeAll(() => {
     token = jwt.sign({ id: 'owner1' }, process.env.JWT_SECRET);
@@ -17,6 +23,11 @@ describe('Staff API', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    Restaurant.findById.mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        lean: jest.fn().mockResolvedValue({ _id: WORKSPACE_RESTAURANT_ID }),
+      }),
+    });
     User.findById = jest.fn().mockReturnValue({
       select: jest.fn().mockResolvedValue({
         _id: 'owner1',
@@ -76,7 +87,7 @@ describe('Staff API', () => {
       expect(res.body.message).toMatch(/name, email, password, and role/i);
     });
 
-    it('returns 400 when role is invalid', async () => {
+    it('returns 403 when owner tries to assign owner role', async () => {
       const res = await request(app)
         .post('/api/staff')
         .set('Authorization', `Bearer ${token}`)
@@ -86,9 +97,64 @@ describe('Staff API', () => {
           password: 'pass123',
           role: 'owner',
         })
+        .expect(403);
+
+      expect(res.body.message).toMatch(/cannot assign/i);
+    });
+
+    it('returns 400 when role is not a restaurant team role', async () => {
+      const res = await request(app)
+        .post('/api/staff')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'New',
+          email: 'new@test.com',
+          password: 'pass123',
+          role: 'chef',
+        })
         .expect(400);
 
-      expect(res.body.message).toMatch(/invalid role|manager or staff/i);
+      expect(res.body.message).toMatch(/Invalid role/i);
+    });
+
+    it('returns 201 when platform admin assigns restaurant owner', async () => {
+      const adminToken = jwt.sign({ id: 'admin1' }, process.env.JWT_SECRET);
+      User.findById = jest.fn().mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          _id: 'admin1',
+          isActive: true,
+          restaurantId: WORKSPACE_RESTAURANT_ID,
+          managedRestaurantIds: [WORKSPACE_RESTAURANT_ID],
+          name: 'Admin',
+          email: 'admin@test.com',
+          role: 'platform_admin',
+          permissions: { canManageStaff: true },
+        }),
+      });
+      User.findOne = jest.fn().mockResolvedValue(null);
+      User.create = jest.fn().mockResolvedValue({
+        _id: 'new-owner',
+        name: 'Co Owner',
+        email: 'coowner@test.com',
+        role: 'owner',
+        restaurantId: WORKSPACE_RESTAURANT_ID,
+        invitationAccepted: true,
+      });
+
+      const res = await request(app)
+        .post('/api/staff')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('X-Restaurant-Id', WORKSPACE_RESTAURANT_ID)
+        .send({
+          name: 'Co Owner',
+          email: 'coowner@test.com',
+          password: 'pass123',
+          role: 'owner',
+        })
+        .expect(201);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.role).toBe('owner');
     });
 
     it('returns 201 when staff is added successfully', async () => {

@@ -2,9 +2,11 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const User = require('../../models/Users');
 const MenuItem = require('../../models/MenuItem');
+const PublicOrder = require('../../models/PublicOrder');
 const app = require('../../server');
 
 jest.mock('../../models/MenuItem');
+jest.mock('../../models/PublicOrder');
 
 describe('Menu API', () => {
   let token;
@@ -73,6 +75,46 @@ describe('Menu API', () => {
 
       expect(res.body.success).toBe(false);
       expect(res.body.message).toMatch(/menu item not found/i);
+    });
+  });
+
+  describe('GET /api/menu/public-orders', () => {
+    it('returns 401 when no token', async () => {
+      await request(app).get('/api/menu/public-orders').expect(401);
+    });
+
+    it('returns guest orders for authenticated restaurant', async () => {
+      const oid = '507f1f77bcf86cd799439012';
+      PublicOrder.find = jest.fn().mockReturnValue({
+        sort: jest.fn().mockReturnValue({
+          limit: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue([
+              {
+                _id: oid,
+                status: 'placed',
+                tableNumber: 2,
+                paymentMethod: 'cash',
+                paymentStatus: 'pending_cash',
+                paymentReference: null,
+                totalAmount: 9.99,
+                items: [{ name: 'Tea', quantity: 1, lineTotal: 9.99, unitPrice: 9.99 }],
+                createdAt: new Date(),
+                updatedAt: new Date()
+              }
+            ])
+          })
+        })
+      });
+
+      const res = await request(app)
+        .get('/api/menu/public-orders')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.count).toBe(1);
+      expect(res.body.data[0].orderNumber).toBeDefined();
+      expect(res.body.data[0].status).toBe('placed');
     });
   });
 });
