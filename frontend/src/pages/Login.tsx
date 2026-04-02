@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 const Login: React.FC = () => {
@@ -12,6 +12,8 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [challengeToken, setChallengeToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -39,6 +41,23 @@ const Login: React.FC = () => {
         password: formData.password
       });
 
+      if (response?.requiresTwoFactor) {
+        if (response?.challengeToken) {
+          setChallengeToken(response.challengeToken);
+          setError('');
+        } else {
+          setError('Two-factor sign-in could not be started. Please try again.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (!response?.token) {
+        setError(response?.message || 'Sign-in did not complete. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       const role = (response?.user?.role || '').toLowerCase();
       if (role === 'platform_admin' || role === 'super_owner') {
         authService.clearSession();
@@ -61,6 +80,50 @@ const Login: React.FC = () => {
       } else {
         setError('Login failed. Please check your connection and try again.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTwoFactorVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const response = await authService.verifyTwoFactorLogin({
+        challengeToken,
+        code: twoFactorCode
+      });
+      if (!response?.token) {
+        setError(response?.message || 'Sign-in could not be completed. Please try again.');
+        return;
+      }
+      const role = (response?.user?.role || '').toLowerCase();
+      if (role === 'platform_admin' || role === 'super_owner') {
+        authService.clearSession();
+        setError('Please use Platform Login for platform admin access');
+        setLoading(false);
+        return;
+      }
+      navigate('/dashboard');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to verify 2FA code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await authService.reactivateAccount({
+        email: formData.email,
+        password: formData.password
+      });
+      setError('Account reactivated successfully. Please sign in now.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not reactivate account');
     } finally {
       setLoading(false);
     }
@@ -114,6 +177,11 @@ const Login: React.FC = () => {
           <div className="mb-8">
             <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Welcome Back</h2>
             <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
+            {!challengeToken ? (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                Step 1: enter your email and password. If two-factor authentication is enabled on your account, you will be asked for an app code next.
+              </p>
+            ) : null}
           </div>
 
           {/* Error Message */}
@@ -124,6 +192,50 @@ const Login: React.FC = () => {
           )}
 
           {/* Login Form */}
+          {challengeToken ? (
+            <form onSubmit={handleTwoFactorVerify} className="space-y-6">
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900 space-y-1">
+                <p className="font-semibold">Step 2 — Authenticator code</p>
+                <p className="text-green-800/90">
+                  Open Google Authenticator, Authy, or your app, choose this account, then enter the 6-digit code.
+                  Codes refresh every 30 seconds.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="twofa" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  2FA code
+                </label>
+                <input
+                  id="twofa"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="block w-full px-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition"
+                  placeholder="123456"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={loading || twoFactorCode.length !== 6}
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-green-600 hover:bg-green-700 transition disabled:opacity-50"
+              >
+                Verify and Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setChallengeToken('');
+                  setTwoFactorCode('');
+                }}
+                className="w-full rounded-lg border border-gray-300 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Back
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Email Field */}
             <div>
@@ -205,6 +317,18 @@ const Login: React.FC = () => {
                 Remember me
               </label>
             </div>
+            <div className="flex items-center justify-between text-sm">
+              <Link to="/forgot-password" className="text-green-600 hover:text-green-700">
+                Forgot password?
+              </Link>
+              <button
+                type="button"
+                onClick={handleReactivate}
+                className="text-gray-600 hover:text-gray-800 underline"
+              >
+                Reactivate account
+              </button>
+            </div>
 
             {/* Sign In Button */}
             <button
@@ -244,6 +368,7 @@ const Login: React.FC = () => {
               Platform Admin Login
             </button>
           </form>
+          )}
 
           {/* Sign Up Link */}
           <div className="mt-6 text-center">

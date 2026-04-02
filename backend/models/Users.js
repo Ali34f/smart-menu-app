@@ -83,7 +83,23 @@ const userSchema = new mongoose.Schema({
     default: true // Owners and directly registered users have it true by default
   },
   resetPasswordToken: String,
-  resetPasswordExpire: Date
+  resetPasswordExpire: Date,
+  twoFactorEnabled: {
+    type: Boolean,
+    default: false
+  },
+  twoFactorSecret: {
+    type: String,
+    default: null,
+    select: false
+  },
+  twoFactorTempSecret: {
+    type: String,
+    default: null,
+    select: false
+  },
+  reactivationToken: String,
+  reactivationTokenExpire: Date
 }, {
   timestamps: true
 });

@@ -4,6 +4,7 @@ import { authService } from '../services/authService';
 import { useToast } from '../hooks/useToast';
 import Toast from '../components/Toast';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatRoleLabel } from '../utils/roleLabels';
 
 type TabType = 'profile' | 'preferences' | 'settings';
 
@@ -298,8 +299,8 @@ const Profile: React.FC = () => {
               <h2 className="text-xl font-bold text-gray-800 capitalize">{profile.name}</h2>
               <p className="text-gray-500">{profile.email}</p>
               <div className="flex items-center space-x-2 mt-2">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 capitalize">
-                  {userRole}
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  {formatRoleLabel(userRole)}
                 </span>
                 <span className="text-gray-400">•</span>
                 <span className="text-sm text-gray-500">{restaurantName}</span>
@@ -539,7 +540,7 @@ const Profile: React.FC = () => {
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Role</span>
-                      <span className="text-sm font-medium text-gray-800 capitalize">{userRole}</span>
+                      <span className="text-sm font-medium text-gray-800">{formatRoleLabel(userRole)}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600">Account Status</span>

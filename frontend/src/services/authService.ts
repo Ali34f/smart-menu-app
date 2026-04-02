@@ -18,6 +18,11 @@ interface LoginData {
   password: string;
 }
 
+interface TwoFactorLoginData {
+  challengeToken: string;
+  code: string;
+}
+
 export const authService = {
   clearSession: () => {
     localStorage.removeItem('authToken');
@@ -34,6 +39,7 @@ export const authService = {
     localStorage.removeItem('profilePicture');
     localStorage.removeItem('invitationAccepted');
     localStorage.removeItem('userPermissions');
+    localStorage.removeItem('twoFactorEnabled');
   },
 
   register: async (data: RegisterData) => {
@@ -51,6 +57,7 @@ export const authService = {
       if (response.data.user.permissions) {
         localStorage.setItem('userPermissions', JSON.stringify(response.data.user.permissions));
       }
+      localStorage.setItem('twoFactorEnabled', response.data.user.twoFactorEnabled ? 'true' : 'false');
     }
 
     return response.data;
@@ -58,6 +65,10 @@ export const authService = {
 
   login: async (data: LoginData) => {
     const response = await api.post('/auth/login', data);
+
+    if (response.data.requiresTwoFactor) {
+      return response.data;
+    }
 
     if (response.data.token) {
       localStorage.setItem('authToken', response.data.token);
@@ -80,8 +91,63 @@ export const authService = {
       if (response.data.user.permissions) {
         localStorage.setItem('userPermissions', JSON.stringify(response.data.user.permissions));
       }
+      localStorage.setItem('twoFactorEnabled', response.data.user.twoFactorEnabled ? 'true' : 'false');
     }
 
+    return response.data;
+  },
+
+  verifyTwoFactorLogin: async (data: TwoFactorLoginData) => {
+    const response = await api.post('/auth/verify-2fa-login', data);
+    if (response.data.token) {
+      localStorage.setItem('authToken', response.data.token);
+      localStorage.setItem('userEmail', response.data.user.email);
+      localStorage.setItem('userName', response.data.user.name || '');
+      localStorage.setItem('restaurantName', response.data.user.restaurantName);
+      localStorage.setItem('restaurantId', response.data.user.restaurantId || '');
+      localStorage.setItem('activeRestaurantId', response.data.user.restaurantId || '');
+      localStorage.setItem('userRole', response.data.user.role);
+      localStorage.setItem('qrCode', response.data.user.qrCode || '');
+      localStorage.setItem('managedRestaurants', JSON.stringify(response.data.user.managedRestaurants || []));
+      localStorage.setItem('invitationAccepted', response.data.user.invitationAccepted === false ? 'false' : 'true');
+      if (response.data.user.profilePicture) {
+        localStorage.setItem('profilePicture', response.data.user.profilePicture);
+      }
+      if (response.data.user.permissions) {
+        localStorage.setItem('userPermissions', JSON.stringify(response.data.user.permissions));
+      }
+      localStorage.setItem('twoFactorEnabled', response.data.user.twoFactorEnabled ? 'true' : 'false');
+    }
+    return response.data;
+  },
+
+  reactivateAccount: async (data: LoginData) => {
+    const response = await api.post('/auth/reactivate', data);
+    return response.data;
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token: string, password: string) => {
+    const response = await api.post('/auth/reset-password', { token, password });
+    return response.data;
+  },
+
+  setupTwoFactor: async () => {
+    const response = await api.post('/auth/2fa/setup');
+    return response.data;
+  },
+
+  enableTwoFactor: async (code: string) => {
+    const response = await api.post('/auth/2fa/enable', { code });
+    return response.data;
+  },
+
+  disableTwoFactor: async (code: string) => {
+    const response = await api.post('/auth/2fa/disable', { code });
     return response.data;
   },
 

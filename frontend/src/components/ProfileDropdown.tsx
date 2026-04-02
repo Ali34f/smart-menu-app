@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { formatRoleLabel } from '../utils/roleLabels';
 
 interface ProfileDropdownProps {
   userName: string;
@@ -11,13 +12,15 @@ interface ProfileDropdownProps {
 const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, restaurantName }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const [restaurants, setRestaurants] = useState<Array<{ id: string; name: string }>>([]);
+  const [activeRestaurantId, setActiveRestaurantId] = useState<string>(localStorage.getItem('activeRestaurantId') || '');
+  const [switchingRestaurant, setSwitchingRestaurant] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const userRole = localStorage.getItem('userRole') || 'staff';
+  const isPlatformAdmin = userRole === 'platform_admin' || userRole === 'super_owner';
 
-  const getRoleLabel = (role: string) => {
-    return role.charAt(0).toUpperCase() + role.slice(1);
-  };
+  const getRoleLabel = (role: string) => formatRoleLabel(role);
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -25,6 +28,28 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
       setProfilePicture(savedPic);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || !isPlatformAdmin) return;
+    const loadRestaurants = async () => {
+      try {
+        const response = await authService.getMyRestaurants();
+        const nextRestaurants = (response?.data || []).map((r: any) => ({
+          id: r.id || r._id,
+          name: r.name
+        }));
+        setRestaurants(nextRestaurants);
+        if (!activeRestaurantId && nextRestaurants.length > 0) {
+          setActiveRestaurantId(nextRestaurants[0].id);
+          localStorage.setItem('activeRestaurantId', nextRestaurants[0].id);
+          localStorage.setItem('restaurantName', nextRestaurants[0].name);
+        }
+      } catch (error) {
+        console.error('Error loading restaurants:', error);
+      }
+    };
+    loadRestaurants();
+  }, [isOpen, isPlatformAdmin, activeRestaurantId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,6 +75,24 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
 
   const handleLogout = () => {
     authService.logout();
+  };
+
+  const handleRestaurantChange = async (nextRestaurantId: string) => {
+    if (!nextRestaurantId || nextRestaurantId === activeRestaurantId) return;
+    try {
+      setSwitchingRestaurant(true);
+      await authService.switchRestaurant(nextRestaurantId);
+      const nextRestaurant = restaurants.find((r) => r.id === nextRestaurantId);
+      if (nextRestaurant) {
+        localStorage.setItem('restaurantName', nextRestaurant.name);
+      }
+      setActiveRestaurantId(nextRestaurantId);
+      window.location.reload();
+    } catch (error) {
+      console.error('Error switching restaurant:', error);
+    } finally {
+      setSwitchingRestaurant(false);
+    }
   };
 
   const menuItems = [
@@ -144,6 +187,23 @@ const ProfileDropdown: React.FC<ProfileDropdownProps> = ({ userName, userEmail, 
               </svg>
               <span className="text-xs text-gray-600 dark:text-gray-300 truncate">{restaurantName}</span>
             </div>
+            {isPlatformAdmin && (
+              <div className="mt-2">
+                <label className="block text-[11px] text-gray-500 dark:text-gray-400 mb-1">Active Restaurant</label>
+                <select
+                  value={activeRestaurantId}
+                  onChange={(e) => handleRestaurantChange(e.target.value)}
+                  disabled={switchingRestaurant}
+                  className="w-full px-2 py-1.5 text-xs border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+                >
+                  {restaurants.map((restaurant) => (
+                    <option key={restaurant.id} value={restaurant.id}>
+                      {restaurant.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Menu Items */}

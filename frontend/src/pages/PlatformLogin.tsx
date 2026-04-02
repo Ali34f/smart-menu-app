@@ -9,6 +9,8 @@ const PlatformLogin: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [challengeToken, setChallengeToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,6 +19,31 @@ const PlatformLogin: React.FC = () => {
 
     try {
       const response = await authService.login({ email, password });
+
+      if (response?.requiresTwoFactor) {
+        if (response?.challengeToken) {
+          const role = (response?.user?.role || '').toLowerCase();
+          if (role !== 'platform_admin' && role !== 'super_owner') {
+            authService.clearSession();
+            setError('This portal is for platform administrators only');
+            setLoading(false);
+            return;
+          }
+          setChallengeToken(response.challengeToken);
+          setError('');
+        } else {
+          setError('Two-factor sign-in could not be started. Please try again.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (!response?.token) {
+        setError(response?.message || 'Sign-in did not complete. Please try again.');
+        setLoading(false);
+        return;
+      }
+
       const role = (response?.user?.role || '').toLowerCase();
       if (role !== 'platform_admin' && role !== 'super_owner') {
         authService.clearSession();
@@ -27,6 +54,33 @@ const PlatformLogin: React.FC = () => {
       navigate('/platform/dashboard');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Could not sign in');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTwoFactorVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const response = await authService.verifyTwoFactorLogin({
+        challengeToken,
+        code: twoFactorCode
+      });
+      if (!response?.token) {
+        setError(response?.message || 'Sign-in could not be completed. Please try again.');
+        return;
+      }
+      const role = (response?.user?.role || '').toLowerCase();
+      if (role !== 'platform_admin' && role !== 'super_owner') {
+        authService.clearSession();
+        setError('This portal is for platform administrators only');
+        return;
+      }
+      navigate('/platform/dashboard');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Invalid or expired code. Try again.');
     } finally {
       setLoading(false);
     }
@@ -83,7 +137,48 @@ const PlatformLogin: React.FC = () => {
             </div>
           )}
 
+          {challengeToken ? (
+            <form onSubmit={handleTwoFactorVerify} className="space-y-4">
+              <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800 p-4 text-sm text-green-900 dark:text-green-100 space-y-1">
+                <p className="font-semibold">Step 2 — Authenticator code</p>
+                <p className="opacity-95">
+                  Enter the 6-digit code from your authenticator app for this platform account.
+                </p>
+              </div>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={twoFactorCode}
+                onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                required
+              />
+              <button
+                type="submit"
+                disabled={loading || twoFactorCode.length !== 6}
+                className="w-full py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition disabled:opacity-60"
+              >
+                {loading ? 'Verifying…' : 'Verify and continue'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setChallengeToken('');
+                  setTwoFactorCode('');
+                  setError('');
+                }}
+                className="w-full py-2.5 text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Back to email & password
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1 mb-1">
+              Step 1 — If your account has 2FA enabled, you will be asked for an app code next.
+            </p>
             <input
               type="email"
               value={email}
@@ -134,6 +229,7 @@ const PlatformLogin: React.FC = () => {
               {loading ? 'Signing in...' : 'Sign In to Platform'}
             </button>
           </form>
+          )}
 
           <button
             type="button"
