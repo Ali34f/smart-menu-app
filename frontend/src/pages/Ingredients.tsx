@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ingredientService } from '../services/ingredientService';
 import { authService } from '../services/authService';
@@ -11,6 +11,10 @@ import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
+import { canCreateOrDeleteIngredients, canEditIngredients } from '../utils/permissions';
 
 interface AllergenRef {
   _id: string;
@@ -41,6 +45,8 @@ const ALLERGEN_COLORS: Record<string, string> = {
   Sesame: 'bg-amber-700'
 };
 
+type ColumnKey = 'select' | 'ingredientName' | 'category' | 'allergens' | 'usedIn' | 'actions';
+
 const Ingredients: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,6 +64,20 @@ const Ingredients: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [selectedIngredientIds, setSelectedIngredientIds] = useState<Set<string>>(new Set());
+  const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>({
+    select: 56,
+    ingredientName: 260,
+    category: 190,
+    allergens: 240,
+    usedIn: 160,
+    actions: 140
+  });
+  const [resizingColumn, setResizingColumn] = useState<ColumnKey | null>(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
@@ -116,19 +136,131 @@ const Ingredients: React.FC = () => {
     setCurrentPage(1);
   };
 
+  const allowIngCreateDelete = canCreateOrDeleteIngredients();
+
+  const handleToggleIngredientSelection = (id: string) => {
+    setSelectedIngredientIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const filteredIngredientIds = filteredIngredients.map((i) => i._id);
+  const selectedFilteredCount = filteredIngredientIds.reduce(
+    (sum, id) => sum + (selectedIngredientIds.has(id) ? 1 : 0),
+    0
+  );
+  const allFilteredSelected =
+    filteredIngredientIds.length > 0 && selectedFilteredCount === filteredIngredientIds.length;
+  const partiallyFilteredSelected =
+    selectedFilteredCount > 0 && selectedFilteredCount < filteredIngredientIds.length;
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    selectAllRef.current.indeterminate = partiallyFilteredSelected;
+  }, [partiallyFilteredSelected]);
+
+  useEffect(() => {
+    // Drop selections that are not in the currently filtered dataset.
+    const filteredSet = new Set(filteredIngredientIds);
+    setSelectedIngredientIds((prev) => {
+      const next = new Set<string>();
+      Array.from(prev).forEach((id) => {
+        if (filteredSet.has(id)) next.add(id);
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredIngredientIds.join('|')]);
+
+  const handleToggleSelectAllFiltered = () => {
+    if (!allowIngCreateDelete) return;
+    setSelectedIngredientIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredIngredients.forEach((i) => next.delete(i._id));
+      } else {
+        filteredIngredients.forEach((i) => next.add(i._id));
+      }
+      return next;
+    });
+  };
+
+  const handleDeleteSelectedItems = () => {
+    if (!allowIngCreateDelete) return;
+    if (selectedIngredientIds.size === 0) return;
+    setItemToDelete({
+      id: '__bulk__',
+      name: `${selectedIngredientIds.size} selected item${selectedIngredientIds.size > 1 ? 's' : ''}`,
+    });
+    setDeleteModalOpen(true);
+  };
+
   const handleDeleteItem = (id: string, name: string) => {
     setItemToDelete({ id, name });
     setDeleteModalOpen(true);
   };
 
+  const startColumnResize = (column: ColumnKey, e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setResizingColumn(column);
+    setStartX(e.clientX);
+    setStartWidth(columnWidths[column]);
+  };
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = e.clientX - startX;
+      const nextWidth = Math.max(90, startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [resizingColumn]: nextWidth }));
+    };
+
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [resizingColumn, startX, startWidth]);
+
   const confirmDelete = async () => {
     if (!itemToDelete) return;
     setDeleteLoading(true);
     try {
-      await ingredientService.delete(itemToDelete.id);
-      success(`${itemToDelete.name} deleted`);
+      if (itemToDelete.id === '__bulk__') {
+        const ids = Array.from(selectedIngredientIds);
+        const results = await Promise.allSettled(ids.map((id) => ingredientService.delete(id)));
+        const deletedCount = results.filter((r) => r.status === 'fulfilled').length;
+        const failedCount = results.length - deletedCount;
+
+        if (deletedCount > 0) {
+          success(`${deletedCount} item${deletedCount > 1 ? 's' : ''} deleted`);
+        }
+        if (failedCount > 0) {
+          showError(`Could not delete ${failedCount} item${failedCount > 1 ? 's' : ''}`);
+        }
+      } else {
+        await ingredientService.delete(itemToDelete.id);
+        success(`${itemToDelete.name} deleted`);
+      }
+
       setDeleteModalOpen(false);
       setItemToDelete(null);
+      setSelectedIngredientIds(new Set());
       fetchIngredients();
     } catch (error) {
       console.error('Error deleting ingredient:', error);
@@ -142,7 +274,7 @@ const Ingredients: React.FC = () => {
     return ALLERGEN_COLORS[name] || 'bg-gray-500';
   };
 
-  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+  const displayRole = formatRoleLabel(userRole);
 
   const getIngredientName = (a: AllergenRef | string) =>
     typeof a === 'string' ? a : a.name;
@@ -193,6 +325,8 @@ const Ingredients: React.FC = () => {
 
   const handleLogout = () => authService.logout();
 
+  const allowIngEdit = canEditIngredients();
+
   return (
     <>
       {toasts.map((t) => (
@@ -201,37 +335,11 @@ const Ingredients: React.FC = () => {
 
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
         <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-                title="Go to Dashboard"
-              >
-                <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z" />
-                </svg>
-              </button>
-              <div className="text-left">
-                <h1 className="text-xl font-bold text-gray-800 dark:text-white">{t('smartMenu')}</h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400">{t('ingredientsManagement')}</p>
-              </div>
+          <div className="flex items-center justify-between px-6 py-4 gap-4">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <AppHeaderBranding title={t('smartMenu')} subtitle={t('ingredientsManagement')} />
             </div>
-
-            <div className="hidden md:flex flex-1 max-w-md mx-8">
-              <div className="relative w-full">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search menu items..."
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                />
-              </div>
-            </div>
+            <WorkspaceContextBar restaurantName={restaurantName} />
 
             <div className="flex items-center space-x-4">
               <NotificationBell />
@@ -241,7 +349,7 @@ const Ingredients: React.FC = () => {
         </header>
 
         <div className="flex flex-1 h-[calc(100vh-80px)]">
-          <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full">
+          <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
             <nav className="flex-1 p-6 flex flex-col justify-between">
               <div className="space-y-2">
                 <button
@@ -369,15 +477,18 @@ const Ingredients: React.FC = () => {
                   <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('ingredientsManagement')}</h2>
                   <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage your ingredient library and allergen links</p>
                 </div>
-                <button
-                  onClick={() => navigate('/ingredients/new')}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                  <span>{t('addNewIngredient')}</span>
-                </button>
+                {allowIngCreateDelete && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/ingredients/new')}
+                    className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <span>{t('addNewIngredient')}</span>
+                  </button>
+                )}
               </div>
 
               {/* Main content: table (left) + stats panel (right) */}
@@ -436,23 +547,110 @@ const Ingredients: React.FC = () => {
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
-                      <tr>
-                        <th className="px-6 py-3 text-left">
-                          <input type="checkbox" className="rounded border-gray-300" />
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('ingredientName')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('category')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('containsAllergens')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('usedIn')}</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('actions')}</th>
-                      </tr>
-                    </thead>
+                  {allowIngCreateDelete && selectedIngredientIds.size > 0 && (
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-700/20">
+                      <div className="text-sm text-gray-700 dark:text-gray-200">
+                        {selectedIngredientIds.size} selected
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedIngredientIds(new Set())}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                        >
+                          Clear
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeleteSelectedItems}
+                          className="px-3 py-1.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-red-500 to-pink-600 text-white hover:from-red-600 hover:to-pink-700"
+                        >
+                          Delete Selected
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="overflow-x-auto">
+                    <table className="w-full table-fixed min-w-[1180px] divide-y divide-gray-200 dark:divide-gray-700">
+                      <colgroup>
+                        {allowIngCreateDelete && <col style={{ width: `${columnWidths.select}px` }} />}
+                        <col style={{ width: `${columnWidths.ingredientName}px` }} />
+                        <col style={{ width: `${columnWidths.category}px` }} />
+                        <col style={{ width: `${columnWidths.allergens}px` }} />
+                        <col style={{ width: `${columnWidths.usedIn}px` }} />
+                        <col style={{ width: `${columnWidths.actions}px` }} />
+                      </colgroup>
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          {allowIngCreateDelete && (
+                            <th className="relative px-6 py-3 text-left">
+                              <input
+                                ref={selectAllRef}
+                                type="checkbox"
+                                checked={allFilteredSelected}
+                                onChange={handleToggleSelectAllFiltered}
+                                className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                aria-label="Select all filtered ingredients"
+                              />
+                              <button
+                                type="button"
+                                onMouseDown={(e) => startColumnResize('select', e)}
+                                className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                                aria-label="Resize select column"
+                              />
+                            </th>
+                          )}
+                          <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {t('ingredientName')}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('ingredientName', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize ingredient name column"
+                            />
+                          </th>
+                          <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {t('category')}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('category', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize category column"
+                            />
+                          </th>
+                          <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {t('containsAllergens')}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('allergens', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize allergens column"
+                            />
+                          </th>
+                          <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {t('usedIn')}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('usedIn', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize used in column"
+                            />
+                          </th>
+                          <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                            {t('actions')}
+                            <button
+                              type="button"
+                              onMouseDown={(e) => startColumnResize('actions', e)}
+                              className="absolute top-0 right-0 h-full w-2 cursor-col-resize"
+                              aria-label="Resize actions column"
+                            />
+                          </th>
+                        </tr>
+                      </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                       {currentItems.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="px-6 py-12 text-center">
+                          <td colSpan={allowIngCreateDelete ? 6 : 5} className="px-6 py-12 text-center">
                             <div className="flex flex-col items-center justify-center">
                               <Icon path={mdiLeaf} size={3} className="text-gray-300 dark:text-gray-600 mb-4" />
                               <p className="text-gray-500 dark:text-gray-400 text-lg font-medium">{t('noIngredientsFound')}</p>
@@ -463,18 +661,26 @@ const Ingredients: React.FC = () => {
                       ) : (
                         currentItems.map((ing) => (
                           <tr key={ing._id} className="hover:bg-green-50 dark:hover:bg-green-900/10 transition">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <input type="checkbox" className="rounded border-gray-300" />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            {allowIngCreateDelete && (
+                              <td className="px-6 py-4">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIngredientIds.has(ing._id)}
+                                  onChange={() => handleToggleIngredientSelection(ing._id)}
+                                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                                  aria-label={`Select ${ing.name}`}
+                                />
+                              </td>
+                            )}
+                            <td className="px-6 py-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">{ing.name}</div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4">
                               <span className="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
                                 {ing.category}
                               </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4">
                               <div className="flex flex-wrap gap-1">
                                 {ing.allergens && ing.allergens.length > 0 ? (
                                   ing.allergens.map((a, i) => (
@@ -490,7 +696,7 @@ const Ingredients: React.FC = () => {
                                 )}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4">
                               <button
                                 onClick={() => {}}
                                 className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
@@ -498,7 +704,7 @@ const Ingredients: React.FC = () => {
                                 {(ing.dishCount ?? 0)} {t('dishes')}
                               </button>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-6 py-4">
                               <div className="flex items-center space-x-2">
                                 <button
                                   onClick={() => navigate(`/ingredients/${ing._id}`)}
@@ -510,24 +716,30 @@ const Ingredients: React.FC = () => {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                   </svg>
                                 </button>
-                                <button
-                                  onClick={() => navigate(`/ingredients/edit/${ing._id}`)}
-                                  className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition"
-                                  title="Edit"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteItem(ing._id, ing.name)}
-                                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                  title="Delete"
-                                >
-                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                {allowIngEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/ingredients/edit/${ing._id}`)}
+                                    className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition"
+                                    title="Edit"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                )}
+                                {allowIngCreateDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteItem(ing._id, ing.name)}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                                    title="Delete"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -535,6 +747,7 @@ const Ingredients: React.FC = () => {
                       )}
                     </tbody>
                   </table>
+                  </div>
 
                   {filteredIngredients.length > 0 && (
                     <div className="bg-white dark:bg-gray-800 px-4 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">

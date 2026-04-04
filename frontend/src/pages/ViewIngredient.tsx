@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ingredientService } from '../services/ingredientService';
+import { canEditIngredients } from '../utils/permissions';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -65,12 +66,17 @@ const ViewIngredient: React.FC = () => {
                 </svg>
               </button>
               <h1 className="text-xl font-bold text-gray-800 dark:text-white">Ingredient Details</h1>
-              <button
-                onClick={() => id ? navigate(`/ingredients/edit/${id}`) : undefined}
-                className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium"
-              >
-                Edit
-              </button>
+              {canEditIngredients() ? (
+                <button
+                  type="button"
+                  onClick={() => (id ? navigate(`/ingredients/edit/${id}`) : undefined)}
+                  className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium"
+                >
+                  Edit
+                </button>
+              ) : (
+                <span className="w-[72px]" aria-hidden />
+              )}
             </div>
           </div>
         </div>

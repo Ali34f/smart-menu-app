@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import api from '../services/api';
 import { restaurantService } from '../services/restaurantService';
-import { getCategoriesForCuisine } from '../utils/menuCategories';
+import { mergeCategoriesForDropdown } from '../utils/menuCategories';
+import { canEditMenuItems } from '../utils/permissions';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -27,6 +28,12 @@ interface FormData {
 const EditMenuItem: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+
+  useEffect(() => {
+    if (!canEditMenuItems()) {
+      navigate('/menu-items', { replace: true });
+    }
+  }, [navigate]);
   const { toasts, removeToast, success, error: showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -59,7 +66,8 @@ const EditMenuItem: React.FC = () => {
     const load = async () => {
       try {
         const restaurant = await restaurantService.getRestaurant();
-        const list = getCategoriesForCuisine(restaurant.cuisineType);
+        const custom = restaurant.menuCategories && restaurant.menuCategories.length > 0 ? restaurant.menuCategories : null;
+        const list = mergeCategoriesForDropdown(restaurant.cuisineType, custom, []);
         setCategories(list);
       } catch (_) {
         // keep default categories

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ingredientService } from '../services/ingredientService';
 import api from '../services/api';
+import { canCreateOrDeleteIngredients } from '../utils/permissions';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -16,6 +17,12 @@ const INGREDIENT_CATEGORIES = ['Protein', 'Dairy', 'Grains', 'Vegetables', 'Frui
 const AddIngredient: React.FC = () => {
   const navigate = useNavigate();
   const { toasts, removeToast, success, error: showError } = useToast();
+
+  useEffect(() => {
+    if (!canCreateOrDeleteIngredients()) {
+      navigate('/ingredients', { replace: true });
+    }
+  }, [navigate]);
   const [loading, setLoading] = useState(false);
   const [allergensLoading, setAllergensLoading] = useState(true);
   const [availableAllergens, setAvailableAllergens] = useState<Allergen[]>([]);

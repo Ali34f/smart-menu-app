@@ -59,5 +59,15 @@ export const menuService = {
       }
     });
     return response.data;
+  },
+
+  getPublicOrders: async (params?: { status?: string }) => {
+    const response = await api.get('/menu/public-orders', { params });
+    return response.data;
+  },
+
+  updatePublicOrderStatus: async (orderId: string, status: string) => {
+    const response = await api.patch(`/menu/public-orders/${orderId}`, { status });
+    return response.data;
   }
 };

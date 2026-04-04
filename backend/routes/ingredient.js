@@ -6,7 +6,7 @@ const {
   updateIngredient,
   deleteIngredient
 } = require('../controllers/ingredient_controller');
-const { protect, checkPermission } = require('../middleware/auth');
+const { protect, checkPermission, requireCanEditIngredients } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ router
 router
   .route('/:id')
   .get(getIngredient)
-  .put(checkPermission('canManageIngredients'), updateIngredient)
+  .put(requireCanEditIngredients, updateIngredient)
   .delete(checkPermission('canManageIngredients'), deleteIngredient);
 
 module.exports = router;

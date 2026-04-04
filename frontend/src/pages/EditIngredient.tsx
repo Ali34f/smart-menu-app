@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ingredientService } from '../services/ingredientService';
 import api from '../services/api';
+import { canEditIngredients } from '../utils/permissions';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
@@ -21,6 +22,12 @@ const INGREDIENT_CATEGORIES = ['Protein', 'Dairy', 'Grains', 'Vegetables', 'Frui
 const EditIngredient: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+
+  useEffect(() => {
+    if (!canEditIngredients()) {
+      navigate('/ingredients', { replace: true });
+    }
+  }, [navigate]);
   const { toasts, removeToast, success, error: showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);

@@ -6,6 +6,13 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/Users');
 
 const router = express.Router();
+const MIME_EXTENSION_MAP = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp'
+};
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -25,7 +32,7 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     // Generate unique filename
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
+    const ext = MIME_EXTENSION_MAP[file.mimetype];
     cb(null, `menu-${uniqueSuffix}${ext}`);
   }
 });
@@ -37,7 +44,7 @@ const profileStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
+    const ext = MIME_EXTENSION_MAP[file.mimetype];
     cb(null, `profile-${uniqueSuffix}${ext}`);
   }
 });
@@ -45,8 +52,10 @@ const profileStorage = multer.diskStorage({
 // File filter - only allow images
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+  const normalizedExt = path.extname(file.originalname || '').toLowerCase();
 
-  if (allowedTypes.includes(file.mimetype)) {
+  if (allowedTypes.includes(file.mimetype) && allowedExtensions.includes(normalizedExt)) {
     cb(null, true);
   } else {
     cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'), false);

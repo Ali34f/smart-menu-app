@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { menuService } from '../services/menuService';
 import { authService } from '../services/authService';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -16,7 +17,10 @@ import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
 import { canCreateOrDeleteMenu, canEditMenuItems } from '../utils/permissions';
 import { restaurantService } from '../services/restaurantService';
-import { getCategoriesForCuisine } from '../utils/menuCategories';
+import {
+  getEffectiveMenuCategories,
+  mergeCategoriesForDropdown
+} from '../utils/menuCategories';
 
 interface Allergen {
   _id?: string;
@@ -85,12 +89,16 @@ const Menu: React.FC = () => {
   }, []);
 
   const [restaurantCuisineType, setRestaurantCuisineType] = useState<string>('Other');
+  const [restaurantMenuCategories, setRestaurantMenuCategories] = useState<string[] | null>(null);
 
   useEffect(() => {
     const loadRestaurantCuisine = async () => {
       try {
         const r = await restaurantService.getRestaurant();
         setRestaurantCuisineType(r?.cuisineType || 'Other');
+        setRestaurantMenuCategories(
+          r?.menuCategories && r.menuCategories.length > 0 ? r.menuCategories : null
+        );
       } catch (e) {
         // Keep default if the restaurant request fails
       }
@@ -98,10 +106,27 @@ const Menu: React.FC = () => {
     loadRestaurantCuisine();
   }, []);
 
+  useEffect(() => {
+    const onRestaurantUpdated = () => {
+      restaurantService
+        .getRestaurant()
+        .then((r) => {
+          setRestaurantCuisineType(r?.cuisineType || 'Other');
+          setRestaurantMenuCategories(
+            r?.menuCategories && r.menuCategories.length > 0 ? r.menuCategories : null
+          );
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('restaurantUpdated', onRestaurantUpdated);
+    return () => window.removeEventListener('restaurantUpdated', onRestaurantUpdated);
+  }, []);
+
   const categories = useMemo(() => {
-    const cats = getCategoriesForCuisine(restaurantCuisineType);
-    return ['All Categories', ...cats];
-  }, [restaurantCuisineType]);
+    const extras = menuItems.map((i) => i.category);
+    const merged = mergeCategoriesForDropdown(restaurantCuisineType, restaurantMenuCategories, extras);
+    return ['All Categories', ...merged];
+  }, [restaurantCuisineType, restaurantMenuCategories, menuItems]);
   const statuses = ['All Status', 'Active', 'Inactive'];
 
   useEffect(() => {
@@ -111,6 +136,19 @@ const Menu: React.FC = () => {
   useEffect(() => {
     filterItems();
   }, [menuItems, searchQuery, selectedCategory, selectedStatus]);
+
+  const sortedFilteredItems = useMemo(() => {
+    const order = getEffectiveMenuCategories(restaurantCuisineType, restaurantMenuCategories);
+    const idx = (cat: string) => {
+      const i = order.findIndex((o) => o.toLowerCase() === cat.toLowerCase());
+      return i === -1 ? 9999 : i;
+    };
+    return [...filteredItems].sort((a, b) => {
+      const d = idx(a.category) - idx(b.category);
+      if (d !== 0) return d;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+  }, [filteredItems, restaurantCuisineType, restaurantMenuCategories]);
 
   useEffect(() => {
     if (!categories.includes(selectedCategory)) {
@@ -233,10 +271,10 @@ const Menu: React.FC = () => {
     authService.logout();
   };
 
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedFilteredItems.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentItems = filteredItems.slice(startIndex, endIndex);
+  const currentItems = sortedFilteredItems.slice(startIndex, endIndex);
   const selectedFilteredCount = filteredItems.filter((item) =>
     selectedItemIds.has(item._id)
   ).length;
@@ -334,6 +372,7 @@ const Menu: React.FC = () => {
   const displayRole = formatRoleLabel(userRole);
   const allowCreateDelete = canCreateOrDeleteMenu();
   const allowEdit = canEditMenuItems();
+  const shouldReduceMotion = useReducedMotion();
 
   const getCategoryBadgeClasses = (category: string) => {
     const normalized = category.toLowerCase();
@@ -554,7 +593,12 @@ const Menu: React.FC = () => {
             ) : (
               <>
             {/* Header */}
-            <div className="flex items-center justify-between mb-6">
+            <motion.div
+              className="flex items-center justify-between mb-6"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <div>
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Menu Items Management</h2>
                 <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage your dishes, allergens, and availability</p>
@@ -570,10 +614,15 @@ const Menu: React.FC = () => {
                   <span>Add New Item</span>
                 </button>
               )}
-            </div>
+            </motion.div>
 
             {/* Filters */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
+            <motion.div
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
               <div className="flex items-center space-x-4">
                 {/* Search */}
                 <div className="flex-1">
@@ -655,7 +704,7 @@ const Menu: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
 
             {/* Table */}
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
@@ -770,10 +819,19 @@ const Menu: React.FC = () => {
                       </td>
                     </tr>
                   ) : (
-                    currentItems.map((item) => {
-                      const allergenBadges = getAllergenBadges(item);
-                      return (
-                      <tr key={item._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    <AnimatePresence initial={false}>
+                      {currentItems.map((item) => {
+                        const allergenBadges = getAllergenBadges(item);
+                        return (
+                      <motion.tr
+                        key={item._id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                        animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                        exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                        transition={{ duration: 0.18 }}
+                        layout={!shouldReduceMotion}
+                      >
                         {allowCreateDelete && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <input
@@ -912,9 +970,10 @@ const Menu: React.FC = () => {
                             )}
                           </div>
                         </td>
-                      </tr>
+                      </motion.tr>
                       );
-                    })
+                    })}
+                    </AnimatePresence>
                   )}
                 </tbody>
               </table>

@@ -20,7 +20,8 @@ const menuItemSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Please add a category'],
-    enum: ['Starters', 'Mains', 'Desserts', 'Drinks', 'Sides', 'Specials']
+    trim: true,
+    maxlength: [100, 'Category name is too long']
   },
   price: {
     type: Number,
