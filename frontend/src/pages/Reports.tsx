@@ -1,21 +1,32 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 import ProfileDropdown from '../components/ProfileDropdown';
 import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
-import { menuService } from '../services/menuService';
+import { qrService } from '../services/qrService';
 import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
 
-interface MenuItemForReport {
+interface TopDishRow {
   _id: string;
   name: string;
-  views?: number;
   image?: string | null;
+  viewsInRange: number;
+  views?: number;
 }
 
 interface AllergenUsage {
@@ -24,42 +35,54 @@ interface AllergenUsage {
   color: string;
 }
 
-interface ComplianceItem {
-  key: string;
+interface EngagementRow {
+  date: string;
   label: string;
-  detail: string;
-  value: number;
-  colorClass: string;
+  totalViews: number;
+  filteredViews: number;
 }
 
-const ALLERGEN_USAGE: AllergenUsage[] = [
-  { name: 'Milk', value: 45, color: '#ef4444' },
-  { name: 'Gluten', value: 32, color: '#f59e0b' },
-  { name: 'Peanuts', value: 18, color: '#eab308' },
-  { name: 'Soy', value: 12, color: '#3b82f6' },
-  { name: 'Eggs', value: 8, color: '#8b5cf6' },
-  { name: 'Others', value: 5, color: '#94a3b8' }
-];
+interface ReportKpis {
+  totalScans: number;
+  uniqueVisitors: number;
+  avgTimeSeconds: number;
+  orders: number;
+  filterEvents: number;
+}
 
-const COMPLIANCE_ITEMS: ComplianceItem[] = [
-  { key: 'tagged', label: 'Menu Items Tagged', detail: '45 of 47 items', value: 95, colorClass: 'text-green-600' },
-  { key: 'training', label: 'Staff Training Complete', detail: 'All staff certified', value: 100, colorClass: 'text-green-600' },
-  { key: 'docs', label: 'Documentation Updated', detail: 'Last updated 3 days ago', value: 87, colorClass: 'text-amber-600' },
-  { key: 'kitchen', label: 'Kitchen Procedures', detail: 'Cross-contamination protocols', value: 100, colorClass: 'text-green-600' }
-];
+interface Compliance {
+  menuItemsTaggedPct: number;
+  menuItemsTaggedDetail: string;
+  untaggedCount: number;
+  overallOk: boolean;
+}
 
-const KPI_CARDS = [
-  { label: 'Avg. Dish Rating', value: '4.6', trend: '+0.2 vs last month', icon: '★' },
-  { label: 'Active Users', value: '1,247', trend: '+18% vs last month', icon: '👥' },
-  { label: 'Allergen Checks', value: '234', trend: '+8% vs last month', icon: '🛡️' },
-  { label: 'Items with Full Data', value: '95%', trend: '+5% vs last month', icon: '📊' }
-];
+const BAR_COLORS = ['#ef4444', '#f59e0b', '#eab308', '#3b82f6', '#8b5cf6', '#14b8a6', '#94a3b8'];
+
+const defaultCustomDates = () => {
+  const end = new Date();
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - 6);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10)
+  };
+};
 
 const Reports: React.FC = () => {
   const navigate = useNavigate();
   const [range, setRange] = useState<'7d' | '30d' | 'custom'>('7d');
-  const [topDishes, setTopDishes] = useState<MenuItemForReport[]>([]);
-  const [topDishesLoading, setTopDishesLoading] = useState(true);
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [topDishes, setTopDishes] = useState<TopDishRow[]>([]);
+  const [allergenUsage, setAllergenUsage] = useState<AllergenUsage[]>([]);
+  const [engagement, setEngagement] = useState<EngagementRow[]>([]);
+  const [kpis, setKpis] = useState<ReportKpis | null>(null);
+  const [compliance, setCompliance] = useState<Compliance | null>(null);
+  const [rangeLabel, setRangeLabel] = useState('');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
@@ -68,29 +91,135 @@ const Reports: React.FC = () => {
   const profilePicture = localStorage.getItem('profilePicture');
   const displayRole = formatRoleLabel(userRole);
 
-  const maxAllergenValue = Math.max(...ALLERGEN_USAGE.map((x) => x.value), 1);
+  const maxAllergenValue = Math.max(...allergenUsage.map((x) => x.value), 1);
+  const maxViewsRange = Math.max(...topDishes.map((d) => d.viewsInRange ?? 0), 1);
+
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (range === 'custom') {
+        const s = customStart || defaultCustomDates().startDate;
+        const e = customEnd || defaultCustomDates().endDate;
+        params.range = 'custom';
+        params.startDate = s;
+        params.endDate = e;
+      } else {
+        params.range = range === '30d' ? '30d' : '7d';
+      }
+
+      const res = await qrService.getRestaurantReports(params);
+      const rows: Array<{ name: string; value: number }> = res?.allergenUsage ?? [];
+      const withColors: AllergenUsage[] = rows.map((row, idx) => ({
+        name: row.name,
+        value: Number(row.value || 0),
+        color: BAR_COLORS[idx % BAR_COLORS.length]
+      }));
+      setAllergenUsage(withColors);
+      setTopDishes(res?.topDishes ?? []);
+      setEngagement(res?.engagement ?? []);
+      setKpis(res?.kpis ?? null);
+      setCompliance(res?.compliance ?? null);
+      setPeriodStart(res?.startDate ?? '');
+      setPeriodEnd(res?.endDate ?? '');
+      const r = res?.range || params.range;
+      if (r === 'custom') {
+        setRangeLabel(`${res?.startDate ?? ''} → ${res?.endDate ?? ''}`);
+      } else if (r === '30d') {
+        setRangeLabel('Last 30 days');
+      } else {
+        setRangeLabel('Last 7 days');
+      }
+    } catch {
+      setAllergenUsage([]);
+      setTopDishes([]);
+      setEngagement([]);
+      setKpis(null);
+      setCompliance(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [range, customStart, customEnd]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await menuService.getAllItems();
-        const items: MenuItemForReport[] = res?.data ?? [];
-        const sorted = [...items].sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
-        setTopDishes(sorted.slice(0, 5));
-      } catch (_) {
-        setTopDishes([]);
-      } finally {
-        setTopDishesLoading(false);
-      }
-    };
-    load();
-  }, []);
+    loadReports();
+  }, [loadReports]);
 
-  const maxViews = useMemo(() => Math.max(...topDishes.map((d) => d.views ?? 0), 1), [topDishes]);
+  const handleCustomClick = () => {
+    const d = defaultCustomDates();
+    setCustomStart(d.startDate);
+    setCustomEnd(d.endDate);
+    setRange('custom');
+  };
+
+  const chartData = useMemo(
+    () =>
+      engagement.map((row) => ({
+        name: row.label,
+        totalViews: row.totalViews,
+        filteredViews: row.filteredViews
+      })),
+    [engagement]
+  );
+
+  const formatDuration = (sec: number) => {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const exportCsv = () => {
+    if (!kpis || !periodStart) {
+      return;
+    }
+    const lines: string[][] = [
+      ['Smart Menu — Reports export'],
+      ['Restaurant', restaurantName],
+      ['Period', `${periodStart} to ${periodEnd}`],
+      ['Range', rangeLabel],
+      [],
+      ['Metric', 'Value'],
+      ['Total menu loads (scans)', String(kpis.totalScans)],
+      ['Unique visitors (approx.)', String(kpis.uniqueVisitors)],
+      ['Avg. session time', kpis.avgTimeSeconds > 0 ? formatDuration(kpis.avgTimeSeconds) : '—'],
+      ['Orders placed', String(kpis.orders)],
+      ['Allergen filter events', String(kpis.filterEvents)],
+      [],
+      ['Top dishes (detail views in range)', 'Views'],
+      ...topDishes.map((d) => [d.name, String(d.viewsInRange)]),
+      [],
+      ['Allergen', 'Filter uses in range'],
+      ...allergenUsage.map((a) => [a.name, String(a.value)])
+    ];
+    if (compliance) {
+      lines.push(
+        [],
+        ['Allergen tagging', compliance.menuItemsTaggedDetail],
+        ['Untagged items', String(compliance.untaggedCount)]
+      );
+    }
+    const csv = lines
+      .map((row) =>
+        row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+      )
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `smart-menu-report-${periodStart}-to-${periodEnd}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   const handleLogout = () => {
     authService.logout();
   };
+
+  const compliancePct = compliance?.menuItemsTaggedPct ?? 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -190,183 +319,292 @@ const Reports: React.FC = () => {
             <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
               <div>
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Reports & Analytics</h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Track menu performance and allergen compliance health</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  {rangeLabel ? `${rangeLabel} · ` : ''}
+                  Live data from QR menu visits, dish views, filters, and orders
+                </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => setRange('7d')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === '7d' ? 'bg-green-500 text-white' : 'bg-white border border-gray-300 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === '7d' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
                 >
                   Last 7 Days
                 </button>
                 <button
+                  type="button"
                   onClick={() => setRange('30d')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === '30d' ? 'bg-green-500 text-white' : 'bg-white border border-gray-300 text-gray-700'}`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === '30d' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
                 >
                   Last 30 Days
                 </button>
                 <button
-                  onClick={() => setRange('custom')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === 'custom' ? 'bg-green-500 text-white' : 'bg-white border border-gray-300 text-gray-700'}`}
+                  type="button"
+                  onClick={handleCustomClick}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === 'custom' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
                 >
                   Custom
                 </button>
-                <button className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
-                  Export Report
+                {range === 'custom' && (
+                  <>
+                    <input
+                      type="date"
+                      value={customStart || defaultCustomDates().startDate}
+                      onChange={(e) => setCustomStart(e.target.value)}
+                      className="px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm"
+                    />
+                    <span className="text-gray-500">to</span>
+                    <input
+                      type="date"
+                      value={customEnd || defaultCustomDates().endDate}
+                      onChange={(e) => setCustomEnd(e.target.value)}
+                      className="px-2 py-2 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 text-sm"
+                    />
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  disabled={loading || !kpis}
+                  className="px-4 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                >
+                  Export CSV
                 </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Top Performing Dishes</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Most viewed (by menu item views)</p>
-
-                {topDishesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500" />
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {topDishes.length === 0 ? (
-                      <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No menu items yet. Add dishes to see top performers here.</p>
-                    ) : (
-                      topDishes.map((dish, index) => {
-                        const views = dish.views ?? 0;
-                        const growthPct = maxViews > 0 ? Math.round((views / maxViews) * 100) : 0;
-                        return (
-                          <div key={dish._id} className="grid grid-cols-[32px_44px_1fr_70px_48px] items-center gap-3">
-                            <span className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm font-bold flex items-center justify-center">{index + 1}</span>
-                            <div className="relative w-11 h-11 rounded-lg bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-hidden flex items-center justify-center flex-shrink-0">
-                              {dish.image ? (
-                                <img src={dish.image} alt={dish.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; const next = e.currentTarget.parentElement?.querySelector('.top-dish-placeholder'); if (next) (next as HTMLElement).classList.remove('hidden'); }} />
-                              ) : null}
-                              <span className={`top-dish-placeholder w-full h-full flex items-center justify-center text-gray-400 text-xl ${dish.image ? 'hidden absolute inset-0' : ''}`}>🍽</span>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{dish.name}</p>
-                              <div className="mt-1 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-                                <div className="h-full rounded-full bg-gradient-to-r from-green-500 to-cyan-500" style={{ width: `${growthPct}%` }} />
-                              </div>
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 text-right">{views} views</p>
-                            <p className="text-xs font-semibold text-green-600 dark:text-green-400 text-right">{growthPct}%</p>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                )}
-              </section>
-
-              <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Most Filtered Allergens</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Customer filter usage</p>
-
-                <div className="h-48 flex items-end gap-4 px-2">
-                  {ALLERGEN_USAGE.map((item) => (
-                    <div key={item.name} className="flex-1 flex flex-col items-center gap-2">
-                      <div className="w-full rounded-t-md" style={{ height: `${(item.value / maxAllergenValue) * 100}%`, backgroundColor: item.color }} />
-                      <p className="text-[11px] text-gray-500 -rotate-12">{item.name}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Views & Engagement</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Last 30 days</p>
-                <div className="h-60">
-                  <svg viewBox="0 0 960 260" className="w-full h-full">
-                    <g stroke="#e5e7eb" strokeWidth="1">
-                      <line x1="60" y1="20" x2="60" y2="210" />
-                      <line x1="60" y1="210" x2="920" y2="210" />
-                      {[180, 300, 420, 540, 660, 780, 900].map((x) => <line key={x} x1={x} y1="20" x2={x} y2="210" />)}
-                      {[170, 130, 90, 50].map((y) => <line key={y} x1="60" y1={y} x2="920" y2={y} />)}
-                    </g>
-                    <polyline fill="none" stroke="#10b981" strokeWidth="3.5" points="60,165 180,150 300,140 420,130 540,112 660,98 780,90 900,80" />
-                    <polyline fill="none" stroke="#3b82f6" strokeWidth="3.5" points="60,190 180,182 300,174 420,166 540,156 660,146 780,136 900,128" />
-                    {['Oct 1', 'Oct 5', 'Oct 10', 'Oct 15', 'Oct 20', 'Oct 25', 'Oct 30'].map((d, i) => (
-                      <text key={d} x={60 + i * 140} y={236} fontSize="12" textAnchor="middle" fill="#6b7280">{d}</text>
-                    ))}
-                  </svg>
-                </div>
-                <div className="mt-2 flex items-center gap-5 text-xs">
-                  <span className="text-blue-600">↔ Allergen Filtered Views</span>
-                  <span className="text-green-600">↔ Total Views</span>
-                </div>
-              </section>
-
-              <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Allergen Compliance</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">UK Food Information Regulations 2014</p>
-
-                <div className="space-y-4">
-                  {COMPLIANCE_ITEMS.map((item) => (
-                    <div key={item.key}>
-                      <div className="flex items-center justify-between gap-2 text-sm">
-                        <p className="font-medium text-gray-800 dark:text-white">{item.label}</p>
-                        <p className="text-gray-500">{item.detail}</p>
-                        <p className={`font-semibold ${item.colorClass}`}>{item.value}%</p>
-                      </div>
-                      <div className="mt-1 h-2 rounded-full bg-gray-200 overflow-hidden">
-                        <div
-                          className={`h-full ${item.value >= 95 ? 'bg-green-500' : item.value >= 85 ? 'bg-amber-500' : 'bg-red-500'}`}
-                          style={{ width: `${item.value}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-5 text-center">
-                  <span className="inline-flex items-center gap-2 rounded-full bg-green-100 text-green-700 px-4 py-1.5 text-sm font-semibold">
-                    <span className="w-2 h-2 rounded-full bg-green-500" /> COMPLIANT
-                  </span>
-                  <p className="text-xs text-gray-500 mt-1">Overall status: Good</p>
-                </div>
-
-                <div className="mt-4 rounded-lg bg-red-50 border border-red-200 p-3">
-                  <p className="text-sm font-semibold text-red-700">2 items need allergen tagging</p>
-                  <button className="mt-2 text-xs px-3 py-1 bg-white border border-red-300 text-red-700 rounded-md">Review Now</button>
-                </div>
-              </section>
-            </div>
-
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
-              {KPI_CARDS.map((card) => (
-                <div key={card.label} className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-                  <p className="text-xl">{card.icon}</p>
-                  <p className="text-3xl font-bold text-gray-800 dark:text-white mt-1">{card.value}</p>
-                  <p className="text-sm text-gray-500 mt-1">{card.label}</p>
-                  <p className="text-xs font-medium text-green-600 mt-1">{card.trend}</p>
-                </div>
-              ))}
-            </section>
-
-            <section className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Data Wiring Guide (Connect Later)</h3>
-              <p className="text-sm text-gray-500 mt-1">Use this mapping when replacing dummy data with live data.</p>
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                  <p className="font-semibold text-gray-800">Top Performing Dishes</p>
-                  <p className="text-gray-600 mt-1">Source: menu views / analytics table</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                  <p className="font-semibold text-gray-800">Most Filtered Allergens</p>
-                  <p className="text-gray-600 mt-1">Source: public filter events per allergen</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                  <p className="font-semibold text-gray-800">Views & Engagement Trend</p>
-                  <p className="text-gray-600 mt-1">Source: daily menu page views + filter interactions</p>
-                </div>
-                <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-                  <p className="font-semibold text-gray-800">Compliance Metrics</p>
-                  <p className="text-gray-600 mt-1">Source: menu tagging completeness + staff training records</p>
-                </div>
+            {loading ? (
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500" />
               </div>
-            </section>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Top Performing Dishes</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Most opened from the public menu in this period (detail views)
+                    </p>
+
+                    <div className="space-y-3">
+                      {topDishes.length === 0 ? (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 py-4">
+                          No dish views in this period yet. Customers opening dish details will appear here.
+                        </p>
+                      ) : (
+                        topDishes.map((dish, index) => {
+                          const views = dish.viewsInRange ?? 0;
+                          const growthPct = maxViewsRange > 0 ? Math.round((views / maxViewsRange) * 100) : 0;
+                          const imgSrc = dish.image
+                            ? dish.image.startsWith('http')
+                              ? dish.image
+                              : `${window.location.origin}${dish.image.startsWith('/') ? dish.image : `/${dish.image}`}`
+                            : null;
+                          return (
+                            <div key={dish._id} className="grid grid-cols-[32px_44px_1fr_70px_48px] items-center gap-3">
+                              <span className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 text-sm font-bold flex items-center justify-center">
+                                {index + 1}
+                              </span>
+                              <div className="relative w-11 h-11 rounded-lg bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 overflow-hidden flex items-center justify-center flex-shrink-0">
+                                {imgSrc ? (
+                                  <img
+                                    src={imgSrc}
+                                    alt={dish.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.onerror = null;
+                                      e.currentTarget.style.display = 'none';
+                                      const next = e.currentTarget.parentElement?.querySelector('.top-dish-placeholder');
+                                      if (next) (next as HTMLElement).classList.remove('hidden');
+                                    }}
+                                  />
+                                ) : null}
+                                <span
+                                  className={`top-dish-placeholder w-full h-full flex items-center justify-center text-gray-400 text-xl ${imgSrc ? 'hidden absolute inset-0' : ''}`}
+                                >
+                                  🍽
+                                </span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 dark:text-white truncate">{dish.name}</p>
+                                <div className="mt-1 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-gradient-to-r from-green-500 to-cyan-500"
+                                    style={{ width: `${growthPct}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 text-right">{views} views</p>
+                              <p className="text-xs font-semibold text-green-600 dark:text-green-400 text-right">{growthPct}%</p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Most Filtered Allergens</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Customer filter usage in this period</p>
+
+                    {allergenUsage.length === 0 ? (
+                      <p className="text-sm text-gray-500 dark:text-gray-400 py-8">
+                        No allergen filter usage in this period. Data appears when guests exclude allergens on the public menu.
+                      </p>
+                    ) : (
+                      <div className="h-48 flex items-end gap-4 px-2">
+                        {allergenUsage.map((item) => (
+                          <div key={item.name} className="flex-1 flex flex-col items-center gap-2 min-w-0">
+                            <div
+                              className="w-full rounded-t-md min-h-[8px]"
+                              style={{
+                                height: `${(item.value / maxAllergenValue) * 100}%`,
+                                backgroundColor: item.color
+                              }}
+                              title={`${item.name}: ${item.value}`}
+                            />
+                            <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center" title={item.name}>
+                              {item.name}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Views & Engagement</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">{rangeLabel}</p>
+                    <div className="h-60 w-full">
+                      {chartData.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-8">No activity in this period.</p>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-600" />
+                            <XAxis dataKey="name" tick={{ fontSize: 11 }} className="text-gray-500" />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                            <Tooltip
+                              contentStyle={{ borderRadius: 8 }}
+                              labelFormatter={(label) => String(label)}
+                            />
+                            <Legend />
+                            <Line type="monotone" dataKey="totalViews" name="Menu loads" stroke="#10b981" strokeWidth={2} dot={false} />
+                            <Line
+                              type="monotone"
+                              dataKey="filteredViews"
+                              name="Allergen filter uses"
+                              stroke="#3b82f6"
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Allergen Compliance</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                      Based on dishes that have at least one allergen tag in your menu
+                    </p>
+
+                    {compliance && (
+                      <>
+                        <div className="space-y-4">
+                          <div>
+                            <div className="flex items-center justify-between gap-2 text-sm">
+                              <p className="font-medium text-gray-800 dark:text-white">Menu items with allergen tags</p>
+                              <p className="text-gray-500 dark:text-gray-400">{compliance.menuItemsTaggedDetail}</p>
+                              <p
+                                className={`font-semibold ${compliancePct >= 95 ? 'text-green-600' : compliancePct >= 80 ? 'text-amber-600' : 'text-red-600'}`}
+                              >
+                                {compliancePct}%
+                              </p>
+                            </div>
+                            <div className="mt-1 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                              <div
+                                className={`h-full ${compliancePct >= 95 ? 'bg-green-500' : compliancePct >= 80 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                style={{ width: `${Math.min(100, compliancePct)}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 text-center">
+                          <span
+                            className={`inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-semibold ${
+                              compliance.overallOk
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${compliance.overallOk ? 'bg-green-500' : 'bg-amber-500'}`} />
+                            {compliance.overallOk ? 'ALL ITEMS TAGGED' : 'ACTION NEEDED'}
+                          </span>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {compliance.overallOk
+                              ? 'Every menu item has allergen information.'
+                              : 'Add allergen tags so guests see accurate information.'}
+                          </p>
+                        </div>
+
+                        {compliance.untaggedCount > 0 && (
+                          <div className="mt-4 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 p-3">
+                            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+                              {compliance.untaggedCount} item{compliance.untaggedCount === 1 ? '' : 's'} need allergen tagging
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/menu-items')}
+                              className="mt-2 text-xs px-3 py-1 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 rounded-md"
+                            >
+                              Review menu items
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                </div>
+
+                <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+                  {kpis && (
+                    <>
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                        <p className="text-xl">📱</p>
+                        <p className="text-3xl font-bold text-gray-800 dark:text-white mt-1">{kpis.totalScans}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Menu loads</p>
+                        <p className="text-xs text-gray-400 mt-1">{rangeLabel}</p>
+                      </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                        <p className="text-xl">👤</p>
+                        <p className="text-3xl font-bold text-gray-800 dark:text-white mt-1">{kpis.uniqueVisitors}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Unique visitors (approx.)</p>
+                        <p className="text-xs text-gray-400 mt-1">First visit per device, per day</p>
+                      </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                        <p className="text-xl">⏱</p>
+                        <p className="text-3xl font-bold text-gray-800 dark:text-white mt-1">
+                          {kpis.avgTimeSeconds > 0 ? formatDuration(kpis.avgTimeSeconds) : '—'}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Avg. session time</p>
+                        <p className="text-xs text-gray-400 mt-1">When guests leave the menu</p>
+                      </div>
+                      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
+                        <p className="text-xl">🧾</p>
+                        <p className="text-3xl font-bold text-gray-800 dark:text-white mt-1">{kpis.orders}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Orders placed</p>
+                        <p className="text-xs text-gray-400 mt-1">{kpis.filterEvents} allergen filter uses</p>
+                      </div>
+                    </>
+                  )}
+                </section>
+              </>
+            )}
           </div>
         </main>
       </div>

@@ -96,3 +96,43 @@ exports.markAllNotificationsRead = async (req, res) => {
     });
   }
 };
+
+// @desc    Mark one notification as read
+// @route   PATCH /api/notifications/:id/read
+// @access  Private
+exports.markNotificationRead = async (req, res) => {
+  try {
+    if (!req.restaurantId) {
+      return res.status(200).json({
+        success: true,
+        data: null
+      });
+    }
+
+    const notification = await Notification.findOne({
+      _id: req.params.id,
+      restaurantId: req.restaurantId
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'Notification not found'
+      });
+    }
+
+    notification.isRead = true;
+    await notification.save();
+
+    res.status(200).json({
+      success: true,
+      data: notification
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating notification',
+      error: error.message
+    });
+  }
+};

@@ -2,7 +2,8 @@ const express = require('express');
 const {
   getNotifications,
   getUnreadCount,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  markNotificationRead
 } = require('../controllers/notification_controller');
 const { protect } = require('../middleware/auth');
 
@@ -13,5 +14,6 @@ router.use(protect);
 router.get('/', getNotifications);
 router.get('/unread-count', getUnreadCount);
 router.patch('/mark-all-read', markAllNotificationsRead);
+router.patch('/:id/read', markNotificationRead);
 
 module.exports = router;

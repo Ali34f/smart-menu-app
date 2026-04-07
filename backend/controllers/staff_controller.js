@@ -4,6 +4,30 @@ const { createNotification } = require('../utils/notificationHelper');
 
 const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'super_owner';
 
+const RESTAURANT_TEAM_ROLES = ['owner', 'manager', 'staff'];
+
+/** Roles the actor may set when inviting or updating restaurant team members. */
+const rolesActorMayAssign = (actorRole) => {
+  if (isPlatformAdminRole(actorRole)) {
+    return ['owner', 'manager', 'staff'];
+  }
+  if (actorRole === 'owner' || actorRole === 'manager') {
+    return ['manager', 'staff'];
+  }
+  return [];
+};
+
+const assertMayAssignRole = (actorRole, targetRole) => {
+  if (!RESTAURANT_TEAM_ROLES.includes(targetRole)) {
+    return 'Invalid role for a restaurant team member.';
+  }
+  const allowed = rolesActorMayAssign(actorRole);
+  if (!allowed.includes(targetRole)) {
+    return `Your role cannot assign "${targetRole}". Owners and managers may only add managers and staff. Platform admins may add owners, managers, and staff.`;
+  }
+  return null;
+};
+
 // @desc    Get all staff for restaurant
 // @route   GET /api/staff
 // @access  Private (Owner, Manager, Staff)
@@ -92,12 +116,12 @@ exports.addStaff = async (req, res, next) => {
       });
     }
 
-    // Check if role is valid
-    const validRoles = ['manager', 'staff'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({
+    const assignErr = assertMayAssignRole(req.user.role, role);
+    if (assignErr) {
+      const status = assignErr.startsWith('Invalid') ? 400 : 403;
+      return res.status(status).json({
         success: false,
-        message: 'Invalid role. Only manager or staff allowed'
+        message: assignErr
       });
     }
 
@@ -168,18 +192,54 @@ exports.updateStaff = async (req, res, next) => {
       });
     }
 
-    // Don't allow changing owner role
     if (staff.role === 'owner') {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot modify owner account'
+      if (!isPlatformAdminRole(req.user.role)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only a platform admin can modify an owner account'
+        });
+      }
+      if (role && role !== 'owner') {
+        return res.status(400).json({
+          success: false,
+          message: 'Owner role cannot be changed here. Contact platform support if you need to transfer ownership.'
+        });
+      }
+      if (name) staff.name = name;
+      if (email) staff.email = email;
+      if (typeof isActive === 'boolean') staff.isActive = isActive;
+      const targetRestaurantId = staff.restaurantId || req.restaurantId;
+      await staff.save();
+      await createNotification({
+        restaurantId: targetRestaurantId,
+        type: 'staff_updated',
+        title: 'Staff member updated',
+        message: `${req.user.name || req.user.email} updated ${staff.name}'s profile.`,
+        createdBy: req.user.id
+      });
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: staff._id,
+          name: staff.name,
+          email: staff.email,
+          role: staff.role,
+          isActive: staff.isActive
+        }
       });
     }
 
-    // Update fields
+    if (role) {
+      const assignErr = assertMayAssignRole(req.user.role, role);
+      if (assignErr) {
+        const status = assignErr.startsWith('Invalid') ? 400 : 403;
+        return res.status(status).json({ success: false, message: assignErr });
+      }
+    }
+
     if (name) staff.name = name;
     if (email) staff.email = email;
-    if (role && ['manager', 'staff'].includes(role)) staff.role = role;
+    if (role) staff.role = role;
     if (typeof isActive === 'boolean') staff.isActive = isActive;
 
     const targetRestaurantId = staff.restaurantId || req.restaurantId;

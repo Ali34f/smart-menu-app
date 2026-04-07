@@ -102,6 +102,99 @@ const restaurantSchema = new mongoose.Schema({
   dailyScans: {
     type: Object,
     default: {}
+  },
+  /** YYYY-MM-DD → count of distinct browser-day visits (client reports first visit of day). */
+  dailyUniqueVisitors: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → sum of session duration seconds reported when guests leave the menu. */
+  dailySessionSeconds: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → number of session-end samples (for average time). */
+  dailySessionSamples: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → public orders placed (conversions). */
+  dailyOrders: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → times a guest applied an allergen filter. */
+  dailyFilteredViews: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → { sanitizedAllergenName: count } for range charts. */
+  dailyAllergenUsage: {
+    type: Object,
+    default: {}
+  },
+  /** YYYY-MM-DD → { menuItemId: view count } for top dishes in a date range. */
+  menuItemViewsByDay: {
+    type: Object,
+    default: {}
+  },
+  allergenFilterUsage: {
+    type: Map,
+    of: Number,
+    default: {}
+  },
+  tableCount: {
+    type: Number,
+    default: 20,
+    min: [1, 'Table count must be at least 1'],
+    max: [500, 'Table count cannot exceed 500']
+  },
+  welcomeMessage: {
+    type: String,
+    default: 'Welcome to our menu. We are glad to have you here.',
+    maxlength: [300, 'Welcome message cannot exceed 300 characters']
+  },
+  /** Ordered list of menu section names (public menu + staff dropdowns). Empty = use cuisine defaults. */
+  menuCategories: {
+    type: [String],
+    default: undefined
+  },
+  businessHours: {
+    monday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    tuesday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    wednesday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    thursday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    friday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    saturday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    },
+    sunday: {
+      enabled: { type: Boolean, default: true },
+      open: { type: String, default: '12:00' },
+      close: { type: String, default: '21:00' }
+    }
   }
 }, {
   timestamps: true

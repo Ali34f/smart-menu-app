@@ -39,5 +39,10 @@ export const notificationService = {
   markAllRead: async (): Promise<number> => {
     const response = await api.patch('/notifications/mark-all-read');
     return response.data?.data?.updatedCount || 0;
+  },
+
+  markAsRead: async (id: string): Promise<NotificationItem | null> => {
+    const response = await api.patch(`/notifications/${id}/read`);
+    return response.data?.data || null;
   }
 };

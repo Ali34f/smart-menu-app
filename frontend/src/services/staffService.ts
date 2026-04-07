@@ -1,10 +1,19 @@
 import api from './api';
 
-interface StaffMember {
+export type RestaurantTeamRole = 'owner' | 'manager' | 'staff';
+
+export interface StaffInvitePayload {
   name: string;
   email: string;
   password: string;
-  role: 'manager' | 'staff';
+  role: RestaurantTeamRole;
+}
+
+export interface StaffUpdatePayload {
+  name?: string;
+  email?: string;
+  role?: RestaurantTeamRole;
+  isActive?: boolean;
 }
 
 export const staffService = {
@@ -13,12 +22,12 @@ export const staffService = {
     return response.data;
   },
 
-  addStaff: async (data: StaffMember) => {
+  addStaff: async (data: StaffInvitePayload) => {
     const response = await api.post('/staff', data);
     return response.data;
   },
 
-  updateStaff: async (id: string, data: Partial<StaffMember>) => {
+  updateStaff: async (id: string, data: StaffUpdatePayload) => {
     const response = await api.put(`/staff/${id}`, data);
     return response.data;
   },

@@ -3,6 +3,23 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '@mdi/react';
 import toast from 'react-hot-toast';
 import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   mdiSilverwareForkKnife,
   mdiLeaf,
   mdiAccountCircleOutline,
@@ -12,7 +29,9 @@ import {
   mdiShieldCheckOutline,
   mdiAlertCircleOutline,
   mdiCheckCircle,
-  mdiInformationOutline
+  mdiInformationOutline,
+  mdiPlaylistEdit,
+  mdiDragVertical
 } from '@mdi/js';
 import ProfileDropdown from '../components/ProfileDropdown';
 import NotificationBell from '../components/NotificationBell';
@@ -22,8 +41,83 @@ import { restaurantService, CUISINE_OPTIONS } from '../services/restaurantServic
 import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
+import { getCategoriesForCuisine } from '../utils/menuCategories';
+import { canCreateOrDeleteMenu } from '../utils/permissions';
 
 const NOTIFICATIONS_MUTED_KEY = 'notificationsMuted';
+const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+type DayKey = (typeof DAY_KEYS)[number];
+type HoursRow = { enabled: boolean; open: string; close: string };
+const DEFAULT_HOURS: Record<DayKey, HoursRow> = {
+  monday: { enabled: true, open: '12:00', close: '21:00' },
+  tuesday: { enabled: true, open: '12:00', close: '21:00' },
+  wednesday: { enabled: true, open: '12:00', close: '21:00' },
+  thursday: { enabled: true, open: '12:00', close: '21:00' },
+  friday: { enabled: true, open: '12:00', close: '21:00' },
+  saturday: { enabled: true, open: '12:00', close: '21:00' },
+  sunday: { enabled: true, open: '12:00', close: '21:00' }
+};
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const hh = String(Math.floor(i / 2)).padStart(2, '0');
+  const mm = i % 2 === 0 ? '00' : '30';
+  return `${hh}:${mm}`;
+});
+
+type MenuSectionRow = { id: string; name: string };
+
+function newMenuSectionRowId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `row-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function namesToMenuRows(names: string[]): MenuSectionRow[] {
+  return names.map((name) => ({ id: newMenuSectionRowId(), name }));
+}
+
+const SortableMenuSectionRow: React.FC<{
+  row: MenuSectionRow;
+  onRemove: (id: string) => void;
+}> = ({ row, onRemove }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: row.id
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 20 : undefined
+  };
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800/50 px-3 py-2.5 ${
+        isDragging ? 'shadow-lg ring-2 ring-green-400/60 dark:ring-green-600 opacity-95' : ''
+      }`}
+    >
+      <button
+        type="button"
+        className="shrink-0 flex h-9 w-9 cursor-grab touch-none items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-100 active:cursor-grabbing dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+        aria-label={`Drag to reorder ${row.name}`}
+        {...attributes}
+        {...listeners}
+      >
+        <Icon path={mdiDragVertical} size={0.95} />
+      </button>
+      <span className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 min-w-0 truncate" title={row.name}>
+        {row.name}
+      </span>
+      <button
+        type="button"
+        onClick={() => onRemove(row.id)}
+        className="shrink-0 rounded-lg border border-red-200 text-red-700 dark:border-red-800 dark:text-red-400 px-2 py-1 text-xs hover:bg-red-50 dark:hover:bg-red-900/20"
+      >
+        Remove
+      </button>
+    </li>
+  );
+};
 
 const Toggle: React.FC<{ checked: boolean; onChange: () => void }> = ({
   checked,
@@ -65,19 +159,27 @@ const Settings: React.FC = () => {
     name: '',
     cuisineType: 'Indian',
     email: '',
-    phone: ''
+    phone: '',
+    welcomeMessage: ''
   });
   const [restaurantSaving, setRestaurantSaving] = useState(false);
+  const [hoursForm, setHoursForm] = useState<Record<DayKey, HoursRow>>(DEFAULT_HOURS);
+  const [hoursSaving, setHoursSaving] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(localStorage.getItem('twoFactorEnabled') === 'true');
+  const [twoFactorSetup, setTwoFactorSetup] = useState<{ qrDataUrl: string; manualKey: string } | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [dangerModal, setDangerModal] = useState<'none' | 'deactivate' | 'delete'>('none');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [menuSectionRows, setMenuSectionRows] = useState<MenuSectionRow[]>([]);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [menuSectionsSaving, setMenuSectionsSaving] = useState(false);
 
-  const [hoursEnabled, setHoursEnabled] = useState({
-    monday: true,
-    tuesday: true,
-    wednesday: true,
-    thursday: true,
-    friday: true,
-    saturday: true,
-    sunday: true
-  });
+  const menuSectionSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const [notificationPrefs, setNotificationPrefs] = useState({
     email: true,
@@ -108,9 +210,28 @@ const Settings: React.FC = () => {
           name: data.name || '',
           cuisineType: data.cuisineType || 'Indian',
           email: data.email || '',
-          phone: data.phone || ''
+          phone: data.phone || '',
+          welcomeMessage: data.welcomeMessage || ''
         });
+        if (data.businessHours) {
+          const next: Record<DayKey, HoursRow> = { ...DEFAULT_HOURS };
+          DAY_KEYS.forEach((day) => {
+            const row = data.businessHours?.[day];
+            if (row) {
+              next[day] = {
+                enabled: Boolean(row.enabled),
+                open: row.open || DEFAULT_HOURS[day].open,
+                close: row.close || DEFAULT_HOURS[day].close
+              };
+            }
+          });
+          setHoursForm(next);
+        }
         setRestaurantName(data.name || '');
+        const defaults = getCategoriesForCuisine(data.cuisineType || 'Indian');
+        const names =
+          data.menuCategories && data.menuCategories.length > 0 ? [...data.menuCategories] : [...defaults];
+        setMenuSectionRows(namesToMenuRows(names));
       } catch (e) {
         console.error('Failed to load restaurant:', e);
       }
@@ -149,16 +270,185 @@ const Settings: React.FC = () => {
         name: restaurantForm.name.trim(),
         cuisineType: restaurantForm.cuisineType,
         email: restaurantForm.email.trim() || undefined,
-        phone: restaurantForm.phone.replace(/\D/g, '').slice(0, 15) || undefined
+        phone: restaurantForm.phone.replace(/\D/g, '').slice(0, 15) || undefined,
+        welcomeMessage: restaurantForm.welcomeMessage?.trim() || undefined
       });
       setRestaurantName(data.name || restaurantForm.name);
       localStorage.setItem('restaurantName', data.name || '');
       window.dispatchEvent(new CustomEvent('profileUpdated'));
+      window.dispatchEvent(new CustomEvent('restaurantUpdated'));
       toast.success('Restaurant updated');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to update restaurant');
     } finally {
       setRestaurantSaving(false);
+    }
+  };
+
+  const handleSaveMenuSections = async () => {
+    const cleaned = menuSectionRows.map((r) => r.name.trim()).filter(Boolean);
+    if (cleaned.length === 0) {
+      toast.error('Add at least one menu section');
+      return;
+    }
+    const seen = new Set<string>();
+    const unique = cleaned.filter((s) => {
+      const k = s.toLowerCase();
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    setMenuSectionsSaving(true);
+    try {
+      await restaurantService.updateRestaurant({ menuCategories: unique });
+      setMenuSectionRows(namesToMenuRows(unique));
+      toast.success('Menu sections saved');
+      window.dispatchEvent(new CustomEvent('restaurantUpdated'));
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save menu sections');
+    } finally {
+      setMenuSectionsSaving(false);
+    }
+  };
+
+  const handleMenuSectionsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setMenuSectionRows((prev) => {
+      const oldIndex = prev.findIndex((r) => r.id === active.id);
+      const newIndex = prev.findIndex((r) => r.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  };
+
+  const removeMenuSection = (id: string) => {
+    setMenuSectionRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const addMenuSection = () => {
+    const t = newSectionName.trim();
+    if (!t) {
+      toast.error('Enter a section name');
+      return;
+    }
+    if (menuSectionRows.some((r) => r.name.toLowerCase() === t.toLowerCase())) {
+      toast.error('That section already exists');
+      return;
+    }
+    if (t.length > 100) {
+      toast.error('Section name is too long');
+      return;
+    }
+    setMenuSectionRows((prev) => [...prev, { id: newMenuSectionRowId(), name: t }]);
+    setNewSectionName('');
+  };
+
+  const resetMenuSectionsToCuisineDefault = () => {
+    const defaults = getCategoriesForCuisine(restaurantForm.cuisineType || 'Indian');
+    setMenuSectionRows(namesToMenuRows([...defaults]));
+    toast.success('Reset to cuisine defaults (save to apply)');
+  };
+
+  const handleSaveBusinessHours = async () => {
+    setHoursSaving(true);
+    try {
+      await restaurantService.updateRestaurant({ businessHours: hoursForm });
+      toast.success('Business hours updated');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update business hours');
+    } finally {
+      setHoursSaving(false);
+    }
+  };
+
+  const handleDeactivateAccount = async () => {
+    try {
+      await restaurantService.deactivateAccount();
+      toast.success('Account deactivated');
+      setTimeout(() => authService.logout(), 700);
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to deactivate account');
+    }
+  };
+
+  const handleDeleteAllData = async () => {
+    if (deleteConfirmation !== 'DELETE') {
+      toast.error('Confirmation text did not match');
+      return;
+    }
+    try {
+      await restaurantService.deleteAllData();
+      toast.success('All operational data deleted');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete data');
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      toast.error('Please complete password fields');
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    setPasswordSaving(true);
+    try {
+      await authService.updateProfile({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      toast.success('Password updated successfully');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update password');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const beginEnableTwoFactor = async () => {
+    try {
+      const res = await authService.setupTwoFactor();
+      setTwoFactorSetup(res?.data || null);
+      setTwoFactorCode('');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to start 2FA setup');
+    }
+  };
+
+  const confirmEnableTwoFactor = async () => {
+    try {
+      await authService.enableTwoFactor(twoFactorCode);
+      setTwoFactorEnabled(true);
+      localStorage.setItem('twoFactorEnabled', 'true');
+      setTwoFactorSetup(null);
+      setTwoFactorCode('');
+      toast.success('Two-factor authentication enabled');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Invalid code');
+    }
+  };
+
+  const disableTwoFactor = async () => {
+    if (!twoFactorCode) {
+      toast.error('Enter your authenticator code to disable 2FA');
+      return;
+    }
+    try {
+      await authService.disableTwoFactor(twoFactorCode);
+      setTwoFactorEnabled(false);
+      localStorage.setItem('twoFactorEnabled', 'false');
+      setTwoFactorCode('');
+      toast.success('Two-factor authentication disabled');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Invalid code');
     }
   };
 
@@ -176,6 +466,7 @@ const Settings: React.FC = () => {
     'w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition';
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="flex items-center justify-between px-6 py-4 gap-4">
@@ -341,38 +632,116 @@ const Settings: React.FC = () => {
                   <EditableField label="Contact Email" value={restaurantForm.email} onChange={(v) => setRestaurantForm((prev) => ({ ...prev, email: v }))} placeholder="contact@restaurant.com" />
                   <EditableField label="Phone" value={restaurantForm.phone} onChange={(v) => setRestaurantForm((prev) => ({ ...prev, phone: v }))} placeholder="e.g. 07123456789" />
                 </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Welcome message (public menu)</label>
+                  <textarea
+                    value={restaurantForm.welcomeMessage}
+                    onChange={(e) => setRestaurantForm((prev) => ({ ...prev, welcomeMessage: e.target.value.slice(0, 300) }))}
+                    rows={3}
+                    placeholder="Welcome to our menu. We are glad to have you here."
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">{restaurantForm.welcomeMessage.length}/300</p>
+                </div>
               </SectionCard>
             </div>
+
+            {canCreateOrDeleteMenu() ? (
+              <SectionCard
+                className="mb-6"
+                title="Menu sections & category order"
+                icon={mdiPlaylistEdit}
+                actionLabel={menuSectionsSaving ? 'Saving...' : 'Save menu sections'}
+                onAction={handleSaveMenuSections}
+                actionDisabled={menuSectionsSaving}
+              >
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Drag the handle beside each section to reorder. The same order is used on the public menu (tabs and sections) and in the menu items category list. Add or remove sections below; remember to save.
+                </p>
+                <DndContext
+                  sensors={menuSectionSensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleMenuSectionsDragEnd}
+                >
+                  <SortableContext
+                    items={menuSectionRows.map((r) => r.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <ul className="space-y-2 mb-4 max-w-3xl">
+                      {menuSectionRows.map((row) => (
+                        <SortableMenuSectionRow key={row.id} row={row} onRemove={removeMenuSection} />
+                      ))}
+                    </ul>
+                  </SortableContext>
+                </DndContext>
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 max-w-3xl">
+                  <input
+                    type="text"
+                    value={newSectionName}
+                    onChange={(e) => setNewSectionName(e.target.value)}
+                    placeholder="New section name (e.g. Chef specials)"
+                    maxLength={100}
+                    className="flex-1 min-w-[200px] rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={addMenuSection}
+                    className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+                  >
+                    Add section
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetMenuSectionsToCuisineDefault}
+                    className="rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    Reset to {restaurantForm.cuisineType} default
+                  </button>
+                </div>
+              </SectionCard>
+            ) : null}
 
             {/* Section: Business Hours full width */}
             <SectionCard
               className="mb-6"
               title="Business Hours"
               icon={mdiClockOutline}
-              actionLabel="Save Hours"
-              onAction={() => {}}
+              actionLabel={hoursSaving ? 'Saving...' : 'Save Hours'}
+              onAction={handleSaveBusinessHours}
+              actionDisabled={hoursSaving}
             >
               <div className="overflow-x-auto">
                 <div className="min-w-[280px] space-y-3">
-                  {Object.entries(hoursEnabled).map(([day, enabled]) => (
+                  {DAY_KEYS.map((day) => {
+                    const row = hoursForm[day];
+                    return (
                     <div key={day} className="grid grid-cols-[minmax(100px,110px)_56px_1fr] items-center gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-0">
                       <p className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">{day}</p>
-                      <Toggle checked={enabled} onChange={() => setHoursEnabled(prev => ({ ...prev, [day]: !enabled }))} />
+                      <Toggle
+                        checked={row.enabled}
+                        onChange={() => setHoursForm((prev) => ({ ...prev, [day]: { ...prev[day], enabled: !prev[day].enabled } }))}
+                      />
                       <div className="flex items-center gap-2 flex-wrap">
-                        <select className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                          <option>12:00</option>
-                          <option>13:00</option>
-                          <option>14:00</option>
+                        <select
+                          value={row.open}
+                          onChange={(e) => setHoursForm((prev) => ({ ...prev, [day]: { ...prev[day], open: e.target.value } }))}
+                          disabled={!row.enabled}
+                          className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
+                        >
+                          {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
                         </select>
                         <span className="text-gray-400">–</span>
-                        <select className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                          <option>21:00</option>
-                          <option>22:00</option>
-                          <option>23:00</option>
+                        <select
+                          value={row.close}
+                          onChange={(e) => setHoursForm((prev) => ({ ...prev, [day]: { ...prev[day], close: e.target.value } }))}
+                          disabled={!row.enabled}
+                          className="px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg bg-white focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:opacity-50"
+                        >
+                          {TIME_OPTIONS.map((time) => <option key={time} value={time}>{time}</option>)}
                         </select>
                       </div>
                     </div>
-                  ))}
+                  );})}
                 </div>
               </div>
             </SectionCard>
@@ -403,13 +772,32 @@ const Settings: React.FC = () => {
                   <h3 className="text-base font-semibold text-gray-800 dark:text-white">Security & Privacy</h3>
                 </div>
                 <div className="p-5 space-y-4">
-                  <button className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-                    Change Password
+                  <input type="password" value={passwordForm.currentPassword} onChange={(e) => setPasswordForm((p) => ({ ...p, currentPassword: e.target.value }))} placeholder="Current password" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                  <input type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm((p) => ({ ...p, newPassword: e.target.value }))} placeholder="New password" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                  <input type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }))} placeholder="Confirm new password" className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700" />
+                  <button onClick={handleChangePassword} disabled={passwordSaving} className="w-full px-4 py-2.5 border border-gray-200 dark:border-gray-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition">
+                    {passwordSaving ? 'Updating...' : 'Change Password'}
                   </button>
                   <div className="flex items-center justify-between py-1">
                     <p className="text-sm text-gray-700 dark:text-gray-300">Two-Factor Authentication</p>
-                    <Toggle checked={false} onChange={() => {}} />
+                    <Toggle checked={twoFactorEnabled} onChange={() => { if (!twoFactorEnabled) beginEnableTwoFactor(); }} />
                   </div>
+                  {twoFactorSetup ? (
+                    <div className="rounded-xl border border-green-200 bg-green-50 p-3 space-y-2">
+                      <p className="text-xs text-green-700">Scan QR in Google Authenticator/Authy, then verify code.</p>
+                      <img src={twoFactorSetup.qrDataUrl} alt="2FA setup QR" className="h-36 w-36 rounded border border-green-200 bg-white" />
+                      <p className="text-xs break-all text-green-800">Manual key: {twoFactorSetup.manualKey}</p>
+                      <input value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" className="w-full rounded-lg border border-green-200 px-3 py-2 text-sm" />
+                      <button onClick={confirmEnableTwoFactor} className="w-full rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-700">Enable 2FA</button>
+                    </div>
+                  ) : null}
+                  {twoFactorEnabled ? (
+                    <div className="rounded-xl border border-gray-200 p-3 space-y-2">
+                      <p className="text-xs text-gray-600">To disable, enter a valid current authenticator code:</p>
+                      <input value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+                      <button onClick={disableTwoFactor} className="w-full rounded-lg border border-red-300 py-2 text-sm text-red-700 hover:bg-red-50">Disable 2FA</button>
+                    </div>
+                  ) : null}
                   <div className="pt-2 space-y-1.5 text-sm">
                     <button type="button" className="block w-full text-left text-green-600 dark:text-green-400 hover:underline">Login History</button>
                     <button type="button" className="block w-full text-left text-green-600 dark:text-green-400 hover:underline">Privacy Settings</button>
@@ -425,10 +813,10 @@ const Settings: React.FC = () => {
                   <h3 className="text-base font-semibold text-red-700 dark:text-red-400">Danger Zone</h3>
                 </div>
                 <div className="p-5 space-y-2">
-                  <button className="w-full px-4 py-2.5 border border-red-200 dark:border-red-800 rounded-xl text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
+                  <button onClick={() => setDangerModal('deactivate')} className="w-full px-4 py-2.5 border border-red-200 dark:border-red-800 rounded-xl text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
                     Deactivate Account
                   </button>
-                  <button className="w-full px-4 py-2.5 border border-red-200 dark:border-red-800 rounded-xl text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
+                  <button onClick={() => setDangerModal('delete')} className="w-full px-4 py-2.5 border border-red-200 dark:border-red-800 rounded-xl text-sm font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
                     Delete All Data
                   </button>
                   <button onClick={() => authService.logout()} className="w-full px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition mt-2">
@@ -453,6 +841,33 @@ const Settings: React.FC = () => {
         </main>
       </div>
     </div>
+    {dangerModal !== 'none' ? (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 px-4">
+        <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl">
+          {dangerModal === 'deactivate' ? (
+            <>
+              <h4 className="text-lg font-semibold text-gray-900">Deactivate account?</h4>
+              <p className="mt-2 text-sm text-gray-600">You can reactivate later from login using your email + password.</p>
+              <div className="mt-5 flex gap-2">
+                <button onClick={() => setDangerModal('none')} className="flex-1 rounded-lg border border-gray-300 py-2 text-sm">Cancel</button>
+                <button onClick={async () => { setDangerModal('none'); await handleDeactivateAccount(); }} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700">Deactivate</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <h4 className="text-lg font-semibold text-gray-900">Delete all data?</h4>
+              <p className="mt-2 text-sm text-gray-600">Type <span className="font-semibold">DELETE</span> to confirm.</p>
+              <input value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value)} className="mt-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <div className="mt-5 flex gap-2">
+                <button onClick={() => { setDangerModal('none'); setDeleteConfirmation(''); }} className="flex-1 rounded-lg border border-gray-300 py-2 text-sm">Cancel</button>
+                <button onClick={async () => { await handleDeleteAllData(); setDangerModal('none'); setDeleteConfirmation(''); }} className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-700">Delete</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 };
 

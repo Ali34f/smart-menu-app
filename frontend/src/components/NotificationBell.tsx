@@ -11,7 +11,7 @@ interface NotificationMeta {
 const notificationMeta: Record<NotificationType, NotificationMeta> = {
   menu_item_created: {
     label: 'Menu',
-    iconClasses: 'text-emerald-600 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300',
+    iconClasses: 'text-green-600 bg-green-100 dark:bg-green-900/30 dark:text-green-300',
     icon: (
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v12m6-6H6" />
@@ -164,7 +164,7 @@ const NotificationBell: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [markingRead, setMarkingRead] = useState(false);
-  const [muted, setMuted] = useState(() => localStorage.getItem(NOTIFICATIONS_MUTED_KEY) === 'true');
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const prevUnreadRef = useRef<number>(0);
   const isFirstFetch = useRef(true);
@@ -205,27 +205,24 @@ const NotificationBell: React.FC = () => {
   };
 
   useEffect(() => {
-    const onMuteChange = (e: CustomEvent<{ muted: boolean }>) => setMuted(e.detail?.muted ?? false);
-    window.addEventListener('notificationsMutedChanged', onMuteChange as EventListener);
-    return () => window.removeEventListener('notificationsMutedChanged', onMuteChange as EventListener);
-  }, []);
-
-  useEffect(() => {
     fetchNotifications(true);
     const interval = window.setInterval(() => fetchNotifications(false), 30000);
     return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open && !fullScreenOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
+      if (!open) return;
       if (!panelRef.current) return;
       if (!panelRef.current.contains(event.target as Node)) setOpen(false);
     };
 
     const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      setOpen(false);
+      setFullScreenOpen(false);
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -234,7 +231,7 @@ const NotificationBell: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEsc);
     };
-  }, [open]);
+  }, [open, fullScreenOpen]);
 
   const unreadItems = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
@@ -269,6 +266,17 @@ const NotificationBell: React.FC = () => {
     }
   };
 
+  const handleMarkOneRead = async (item: NotificationItem) => {
+    if (item.isRead) return;
+    try {
+      await notificationService.markAsRead(item._id);
+      await fetchNotifications(false);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      toast.error('Could not update notification');
+    }
+  };
+
   return (
     <div className="relative" ref={panelRef}>
       <button
@@ -299,20 +307,24 @@ const NotificationBell: React.FC = () => {
                 {displayedUnreadCount > 0 ? `${displayedUnreadCount} unread update${displayedUnreadCount > 1 ? 's' : ''}` : 'You are all caught up'}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button
                 type="button"
-                onClick={() => { unlockAudioOnInteraction(); void playNotificationSound(); }}
-                className="text-xs font-medium text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                title="Test notification sound"
+                onClick={() => {
+                  setFullScreenOpen(true);
+                  setOpen(false);
+                }}
+                disabled={groupedNotifications.length === 0}
+                className="text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-400 disabled:text-gray-400 disabled:cursor-not-allowed"
+                title="Open full-screen view"
               >
-                Test sound
+                Full screen
               </button>
               <button
                 type="button"
                 onClick={handleMarkAllRead}
                 disabled={markingRead || displayedUnreadCount === 0}
-                className="text-xs font-medium text-emerald-600 hover:text-emerald-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                className="text-xs font-medium text-green-600 hover:text-green-700 disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 {markingRead ? 'Marking...' : 'Mark all read'}
               </button>
@@ -348,7 +360,7 @@ const NotificationBell: React.FC = () => {
                           className={`rounded-lg border transition p-3 ${
                             item.isRead
                               ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
-                              : 'bg-white dark:bg-gray-800 border-emerald-200 dark:border-emerald-700/60 shadow-sm'
+                              : 'bg-white dark:bg-gray-800 border-green-200 dark:border-green-700/60 shadow-sm'
                           }`}
                         >
                           <div className="flex items-start gap-3">
@@ -363,14 +375,23 @@ const NotificationBell: React.FC = () => {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-3">
                                 <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{item.title}</p>
-                                {!item.isRead && <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 flex-shrink-0" />}
+                                {!item.isRead && <span className="w-2 h-2 rounded-full bg-green-500 mt-1.5 flex-shrink-0" />}
                               </div>
                               <p className="text-sm text-gray-600 dark:text-gray-300 mt-0.5 break-words">{item.message}</p>
-                              <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-gray-500 dark:text-gray-400">
                                 <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700">{meta?.label || 'Update'}</span>
                                 <span>{actorName ? `By ${actorName}` : 'System'}</span>
                                 <span>•</span>
                                 <span>{formatTimeAgo(item.createdAt)}</span>
+                                {!item.isRead && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMarkOneRead(item)}
+                                    className="ml-auto text-green-600 dark:text-green-400 font-semibold hover:underline"
+                                  >
+                                    Mark read
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -381,6 +402,107 @@ const NotificationBell: React.FC = () => {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {fullScreenOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-6 bg-black/50 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="notifications-fs-title"
+        >
+          <div className="w-full max-w-3xl max-h-[min(92vh,900px)] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between gap-3 flex-shrink-0">
+               <div>
+                <h3 id="notifications-fs-title" className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Notifications
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {displayedUnreadCount > 0 ? `${displayedUnreadCount} unread` : 'You are all caught up'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleMarkAllRead}
+                  disabled={markingRead || displayedUnreadCount === 0}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50"
+                >
+                  Mark all read
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFullScreenOpen(false)}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  aria-label="Close full screen notifications"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-gray-50/80 dark:bg-gray-900/40">
+              {loading ? (
+                <div className="py-20 text-center text-gray-500 dark:text-gray-400">Loading…</div>
+              ) : groupedNotifications.length === 0 ? (
+                <div className="py-16 text-center text-gray-500 dark:text-gray-400">No notifications yet.</div>
+              ) : (
+                groupedNotifications.map((group) => (
+                  <div key={group.label} className="mb-6 last:mb-0">
+                    <div className="sticky top-0 z-10 px-1 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 bg-gray-50/95 dark:bg-gray-900/95">
+                      {group.label}
+                    </div>
+                    <div className="space-y-3 mt-2">
+                      {group.items.map((item) => {
+                        const meta = notificationMeta[item.type];
+                        const actorName = getActorName(item);
+                        return (
+                          <div
+                            key={item._id}
+                            className={`rounded-xl border p-4 text-base ${
+                              item.isRead
+                                ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
+                                : 'bg-white dark:bg-gray-800 border-green-200 dark:border-green-700/60 shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start gap-4">
+                              <span className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${meta?.iconClasses || 'text-gray-600 bg-gray-100 dark:bg-gray-700 dark:text-gray-300'}`}>
+                                {meta?.icon}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-3">
+                                  <p className="text-base font-semibold text-gray-900 dark:text-white">{item.title}</p>
+                                  {!item.isRead && <span className="w-2.5 h-2.5 rounded-full bg-green-500 mt-2 flex-shrink-0" />}
+                                </div>
+                                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-1 leading-relaxed">{item.message}</p>
+                                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                  <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-700">{meta?.label || 'Update'}</span>
+                                  <span>{actorName ? `By ${actorName}` : 'System'}</span>
+                                  <span>•</span>
+                                  <span>{formatTimeAgo(item.createdAt)}</span>
+                                  {!item.isRead && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMarkOneRead(item)}
+                                      className="text-green-600 dark:text-green-400 font-semibold hover:underline"
+                                    >
+                                      Mark read
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

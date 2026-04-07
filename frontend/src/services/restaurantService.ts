@@ -28,6 +28,10 @@ export interface RestaurantProfile {
     postcode: string;
     country: string;
   };
+  welcomeMessage?: string;
+  businessHours?: Record<string, { enabled: boolean; open: string; close: string }>;
+  /** Custom section order; when empty, cuisine defaults are used */
+  menuCategories?: string[];
 }
 
 export const restaurantService = {
@@ -38,6 +42,16 @@ export const restaurantService = {
 
   updateRestaurant: async (data: Partial<RestaurantProfile>): Promise<{ data: RestaurantProfile }> => {
     const response = await api.put('/restaurant', data);
+    return response.data;
+  },
+
+  deleteAllData: async () => {
+    const response = await api.post('/restaurant/danger/delete-data');
+    return response.data;
+  },
+
+  deactivateAccount: async () => {
+    const response = await api.post('/restaurant/danger/deactivate');
     return response.data;
   }
 };

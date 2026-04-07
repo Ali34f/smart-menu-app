@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
-import { staffService } from '../services/staffService';
+import { staffService, type RestaurantTeamRole } from '../services/staffService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import Toast from '../components/Toast';
@@ -64,36 +64,55 @@ const Staff: React.FC = () => {
   const [editForm, setEditForm] = useState({
     name: '',
     email: '',
-    role: 'staff' as 'manager' | 'staff',
+    role: 'staff' as RestaurantTeamRole,
     isActive: true
   });
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
-  const userRole = localStorage.getItem('userRole') || 'staff';
+  const rawUserRole = localStorage.getItem('userRole') || 'staff';
+  const normalizedUserRole = rawUserRole.toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
 
-  const isMohammedKhan = userName.toLowerCase().includes('mohammed') || 
-                        userEmail.toLowerCase().includes('mohammed');
-  
+  const isPlatformAdmin =
+    normalizedUserRole === 'platform_admin' || normalizedUserRole === 'super_owner';
+
   const canManageStaff =
-    userRole === 'owner' ||
-    userRole === 'manager' ||
-    userRole === 'platform_admin' ||
-    userRole === 'super_owner' ||
-    isMohammedKhan;
-  const canInviteStaff =
-    userRole === 'owner' ||
-    userRole === 'manager' ||
-    userRole === 'platform_admin' ||
-    userRole === 'super_owner';
+    normalizedUserRole === 'owner' ||
+    normalizedUserRole === 'manager' ||
+    isPlatformAdmin;
+
+  const canInviteStaff = canManageStaff;
+
+  const canDeleteStaff =
+    normalizedUserRole === 'owner' || isPlatformAdmin;
+
+  /** Extra restaurant column when platform admins work in a workspace context */
+  const showRestaurantColumn = isPlatformAdmin;
+
+  const rolesAssignableOnInvite = (): RestaurantTeamRole[] => {
+    if (isPlatformAdmin) return ['owner', 'manager', 'staff'];
+    if (normalizedUserRole === 'owner' || normalizedUserRole === 'manager') {
+      return ['manager', 'staff'];
+    }
+    return [];
+  };
+
+  const rolesAssignableOnEdit = (target: StaffMember): RestaurantTeamRole[] => {
+    if (target.role === 'owner') return ['owner'];
+    if (isPlatformAdmin) return ['owner', 'manager', 'staff'];
+    if (normalizedUserRole === 'owner' || normalizedUserRole === 'manager') {
+      return ['manager', 'staff'];
+    }
+    return [];
+  };
 
   const [inviteForm, setInviteForm] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'staff' as 'manager' | 'staff'
+    role: 'staff' as RestaurantTeamRole
   });
 
   useEffect(() => {
@@ -107,6 +126,15 @@ const Staff: React.FC = () => {
     fetchStaffMembers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isInviteModalOpen) return;
+    const allowed = rolesAssignableOnInvite();
+    if (!allowed.includes(inviteForm.role)) {
+      setInviteForm((f) => ({ ...f, role: allowed[0] ?? 'staff' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInviteModalOpen]);
 
   useEffect(() => {
     if (!resizingColumn) return;
@@ -160,7 +188,7 @@ const Staff: React.FC = () => {
     e.preventDefault();
 
     if (!canInviteStaff) {
-      showError('Only owners and managers can invite staff');
+      showError('You do not have permission to invite team members');
       return;
     }
     
@@ -208,15 +236,15 @@ const Staff: React.FC = () => {
   };
 
   const handleEditStaff = (staff: StaffMember) => {
-    if (staff.role === 'owner') {
-      showError('Cannot edit owner account');
+    if (staff.role === 'owner' && !isPlatformAdmin) {
+      showError('Only a platform admin can edit an owner account');
       return;
     }
     setSelectedStaff(staff);
     setEditForm({
       name: staff.name,
       email: staff.email,
-      role: (staff.role === 'manager' ? 'manager' : 'staff') as 'manager' | 'staff',
+      role: staff.role === 'manager' ? 'manager' : staff.role === 'owner' ? 'owner' : 'staff',
       isActive: staff.isActive
     });
     setIsEditModalOpen(true);
@@ -228,7 +256,11 @@ const Staff: React.FC = () => {
 
     try {
       setEditLoading(true);
-      await staffService.updateStaff(selectedStaff._id, editForm);
+      const payload =
+        selectedStaff.role === 'owner'
+          ? { name: editForm.name, email: editForm.email, isActive: editForm.isActive }
+          : { name: editForm.name, email: editForm.email, role: editForm.role, isActive: editForm.isActive };
+      await staffService.updateStaff(selectedStaff._id, payload);
       toast.success('Staff member updated successfully');
       setIsEditModalOpen(false);
       setSelectedStaff(null);
@@ -305,6 +337,9 @@ const Staff: React.FC = () => {
   const totalStaff = staffMembers.length;
   const activeMembers = staffMembers.filter(s => s.isActive).length;
   const managers = staffMembers.filter(s => s.role === 'manager' || s.role === 'owner').length;
+
+  const tableColumnCount =
+    5 + (showRestaurantColumn ? 1 : 0) + (canManageStaff ? 1 : 0);
 
   const handleLogout = () => {
     authService.logout();
@@ -456,7 +491,7 @@ const Staff: React.FC = () => {
                   <p className="text-sm font-medium text-gray-800 dark:text-white capitalize truncate">
                     {userName}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{formatRoleLabel(userRole)}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{formatRoleLabel(normalizedUserRole)}</p>
                 </div>
               </div>
               <button
@@ -527,7 +562,7 @@ const Staff: React.FC = () => {
                       <colgroup>
                         <col style={{ width: `${columnWidths.member}px` }} />
                         <col style={{ width: `${columnWidths.email}px` }} />
-                        {isMohammedKhan && <col style={{ width: `${columnWidths.restaurant}px` }} />}
+                        {showRestaurantColumn && <col style={{ width: `${columnWidths.restaurant}px` }} />}
                         <col style={{ width: `${columnWidths.role}px` }} />
                         <col style={{ width: `${columnWidths.status}px` }} />
                         <col style={{ width: `${columnWidths.lastLogin}px` }} />
@@ -553,7 +588,7 @@ const Staff: React.FC = () => {
                               aria-label="Resize Email column"
                             />
                           </th>
-                          {isMohammedKhan && (
+                          {showRestaurantColumn && (
                             <th className="relative text-left py-3 px-4 text-sm font-semibold text-gray-700 dark:text-gray-300">
                               Restaurant
                               <button
@@ -607,7 +642,7 @@ const Staff: React.FC = () => {
                       <tbody>
                         {filteredStaff.length === 0 ? (
                           <tr>
-                            <td colSpan={isMohammedKhan ? (canManageStaff ? 7 : 6) : (canManageStaff ? 6 : 5)} className="text-center py-8 text-gray-500 dark:text-gray-400">
+                            <td colSpan={tableColumnCount} className="text-center py-8 text-gray-500 dark:text-gray-400">
                               No staff members found
                             </td>
                           </tr>
@@ -631,17 +666,13 @@ const Staff: React.FC = () => {
                                   </div>
                                 </td>
                                 <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm truncate">{staff.email}</td>
-                                {isMohammedKhan && (
+                                {showRestaurantColumn && (
                                   <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm truncate">
-                                    {(() => {
-                                      if (staff.name.toLowerCase().includes('mohammed')) {
-                                        return 'All Restaurants';
-                                      }
-                                      if (typeof staff.restaurantId === 'object' && staff.restaurantId !== null && staff.restaurantId.name) {
-                                        return staff.restaurantId.name;
-                                      }
-                                      return restaurantName;
-                                    })()}
+                                    {typeof staff.restaurantId === 'object' &&
+                                    staff.restaurantId !== null &&
+                                    'name' in staff.restaurantId
+                                      ? staff.restaurantId.name
+                                      : restaurantName}
                                   </td>
                                 )}
                                 <td className="py-4 px-4">
@@ -661,26 +692,28 @@ const Staff: React.FC = () => {
                                     <div className="flex items-center space-x-2">
                                       <button
                                         onClick={() => handleEditStaff(staff)}
-                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400"
                                         title="Edit"
+                                        disabled={staff.role === 'owner' && !isPlatformAdmin}
                                       >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                         </svg>
                                       </button>
-                                      <button
-                                        onClick={() => {
-                                          setSelectedStaff(staff);
-                                          setIsDeleteModalOpen(true);
-                                        }}
-                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
-                                        title="Delete"
-                                        disabled={staff.role === 'owner' && staff.name.toLowerCase().includes('mohammed')}
-                                      >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                        </svg>
-                                      </button>
+                                      {canDeleteStaff && staff.role !== 'owner' && (
+                                        <button
+                                          onClick={() => {
+                                            setSelectedStaff(staff);
+                                            setIsDeleteModalOpen(true);
+                                          }}
+                                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                          title="Delete"
+                                        >
+                                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                          </svg>
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 )}
@@ -830,11 +863,19 @@ const Staff: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Role</label>
                       <select
                         value={inviteForm.role}
-                        onChange={(e) => setInviteForm({ ...inviteForm, role: e.target.value as 'manager' | 'staff' })}
+                        onChange={(e) =>
+                          setInviteForm({
+                            ...inviteForm,
+                            role: e.target.value as RestaurantTeamRole
+                          })
+                        }
                         className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
                       >
-                        <option value="staff">Staff</option>
-                        <option value="manager">Manager</option>
+                        {rolesAssignableOnInvite().map((r) => (
+                          <option key={r} value={r}>
+                            {formatRoleLabel(r)}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -869,7 +910,9 @@ const Staff: React.FC = () => {
 
                   <div className="rounded-lg border border-green-100 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2.5">
                     <p className="text-xs font-medium text-green-700 dark:text-green-300">
-                      Access reminder: Managers can invite and manage staff. Staff can only view team details.
+                      {isPlatformAdmin
+                        ? 'Platform admins can add owners, managers, or staff for this workspace. Owners and managers can only add managers and staff. Staff cannot invite anyone.'
+                        : 'Owners and managers can add managers and staff. Staff can only view team details.'}
                     </p>
                   </div>
 
@@ -951,15 +994,25 @@ const Staff: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
-                    <select
-                      value={editForm.role}
-                      onChange={(e) => setEditForm({ ...editForm, role: e.target.value as 'manager' | 'staff' })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      disabled={selectedStaff.role === 'owner'}
-                    >
-                      <option value="staff">Staff</option>
-                      <option value="manager">Manager</option>
-                    </select>
+                    {selectedStaff.role === 'owner' ? (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 py-2">
+                        {formatRoleLabel('owner')} — role cannot be changed here.
+                      </p>
+                    ) : (
+                      <select
+                        value={editForm.role}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, role: e.target.value as RestaurantTeamRole })
+                        }
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                      >
+                        {rolesAssignableOnEdit(selectedStaff).map((r) => (
+                          <option key={r} value={r}>
+                            {formatRoleLabel(r)}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                   <div className="flex items-center space-x-2">
                     <input

@@ -1,14 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
 import { activityService, Activity } from '../services/activityService';
+import { qrService } from '../services/qrService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import NotificationBell from '../components/NotificationBell';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { useLanguage } from '../contexts/LanguageContext';
+import { formatRoleLabel } from '../utils/roleLabels';
+import AppHeaderBranding from '../components/AppHeaderBranding';
+import WorkspaceContextBar from '../components/WorkspaceContextBar';
+
+type GuestOrderRow = {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  tableNumber: number;
+  paymentMethod: string;
+  totalAmount: number;
+  items: Array<{ name: string; quantity: number; lineTotal?: number }>;
+  createdAt?: string;
+};
+
+const GUEST_ORDER_STATUS_OPTIONS = [
+  { value: 'placed', label: 'Placed' },
+  { value: 'preparing', label: 'Preparing' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'confirmed', label: 'Confirmed (legacy)' }
+] as const;
+
+const formatGuestOrderMoney = (n: number) =>
+  new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: 2 }).format(
+    Number(n) || 0
+  );
 
 interface MenuItem {
   _id: string;
@@ -17,6 +47,7 @@ interface MenuItem {
   price: number;
   category: string;
   isAvailable: boolean;
+  allergens?: Array<{ _id?: string; name?: string } | string>;
 }
 
 
@@ -97,6 +128,7 @@ const Dashboard: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [welcomeAnimated, setWelcomeAnimated] = useState(false);
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
@@ -104,6 +136,14 @@ const Dashboard: React.FC = () => {
   const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const [showAllActivity, setShowAllActivity] = useState(false);
+  /** Last 7 days: dish detail views on public menu (from Restaurant.menuItemViewsByDay). */
+  const [popularThisWeek, setPopularThisWeek] = useState<Array<{ name: string; views: number }>>([]);
+  /** Menu loads today from dailyScans (UTC date key). */
+  const [menuLoadsToday, setMenuLoadsToday] = useState<number | null>(null);
+  const [mostViewedDishName, setMostViewedDishName] = useState<string | null>(null);
+  const [guestOrders, setGuestOrders] = useState<GuestOrderRow[]>([]);
+  const [guestOrdersLoading, setGuestOrdersLoading] = useState(false);
+  const [guestOrderUpdatingId, setGuestOrderUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -129,14 +169,59 @@ const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
 
+  useEffect(() => {
+    // Small attention-grabber animation on first load.
+    setWelcomeAnimated(true);
+    const t = setTimeout(() => setWelcomeAnimated(false), 1600);
+    return () => clearTimeout(t);
+  }, []);
+
+  const fetchGuestOrders = async () => {
+    setGuestOrdersLoading(true);
+    try {
+      const res = await menuService.getPublicOrders();
+      const rows = Array.isArray(res?.data) ? res.data : [];
+      setGuestOrders(rows as GuestOrderRow[]);
+    } catch {
+      setGuestOrders([]);
+    } finally {
+      setGuestOrdersLoading(false);
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
-      const [menuData, activities] = await Promise.all([
+      const [menuData, activities, reportsRes, scansRes] = await Promise.all([
         menuService.getAllItems(),
-        activityService.getActivities(50)
+        activityService.getActivities(50),
+        qrService.getRestaurantReports({ range: '7d' }).catch(() => null),
+        qrService.getScanAnalytics({ range: '7d' }).catch(() => null)
       ]);
       setMenuItems(menuData.data || []);
       setRecentActivity(activities || []);
+
+      const top = reportsRes?.topDishes;
+      if (Array.isArray(top) && top.length > 0) {
+        setPopularThisWeek(
+          top.slice(0, 5).map((d: { name: string; viewsInRange?: number }) => ({
+            name: d.name,
+            views: Number(d.viewsInRange ?? 0)
+          }))
+        );
+        setMostViewedDishName(top[0]?.name ?? null);
+      } else {
+        setPopularThisWeek([]);
+        setMostViewedDishName(null);
+      }
+
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const dayRows = scansRes?.data;
+      if (Array.isArray(dayRows)) {
+        const todayRow = dayRows.find((r: { date: string }) => r?.date === todayKey);
+        setMenuLoadsToday(todayRow != null ? Number(todayRow.count ?? 0) : 0);
+      } else {
+        setMenuLoadsToday(null);
+      }
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
 
@@ -148,71 +233,102 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (!loading) {
+      void fetchGuestOrders();
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    const id = window.setInterval(() => {
+      void fetchGuestOrders();
+    }, 20000);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  const handleGuestOrderStatusChange = async (orderId: string, status: string) => {
+    setGuestOrderUpdatingId(orderId);
+    try {
+      await menuService.updatePublicOrderStatus(orderId, status);
+      await fetchGuestOrders();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setGuestOrderUpdatingId(null);
+    }
+  };
+
   const totalItems = menuItems.length;
   const activeItems = menuItems.filter(item => item.isAvailable).length;
 
-  const mockQueriesToday = 23;
-  const mockMostViewedItem = 'Chicken Tikka';
+  const maxPopularViews = Math.max(1, ...popularThisWeek.map((p) => p.views));
 
-  const mockPopularItems = [
-    { name: 'Chicken Tikka', views: 360 },
-    { name: 'Lamb Biryani', views: 310 },
-    { name: 'Paneer Tikka', views: 285 },
-    { name: 'Vegetable Samosa', views: 240 },
-    { name: 'Butter Chicken', views: 210 }
-  ];
+  const allergenColorMap: Record<string, string> = {
+    Gluten: '#EF4444',
+    Dairy: '#F59E0B',
+    Nuts: '#6B7280',
+    Other: '#3B82F6'
+  };
 
-  const mockAllergenData = [
-    { name: 'Gluten', percentage: 35, color: '#EF4444' },
-    { name: 'Dairy', percentage: 25, color: '#F59E0B' },
-    { name: 'Nuts', percentage: 13, color: '#6B7280' },
-    { name: 'Other', percentage: 27, color: '#3B82F6' }
+  const normalizeAllergenName = (rawName: string): 'Gluten' | 'Dairy' | 'Nuts' | 'Other' => {
+    const name = rawName.toLowerCase();
+    if (name.includes('gluten') || name.includes('wheat') || name.includes('barley') || name.includes('rye')) return 'Gluten';
+    if (name.includes('milk') || name.includes('dairy') || name.includes('lactose')) return 'Dairy';
+    if (name.includes('nut') || name.includes('peanut') || name.includes('almond') || name.includes('cashew') || name.includes('hazelnut') || name.includes('pistachio') || name.includes('walnut')) return 'Nuts';
+    return 'Other';
+  };
+
+  const allergenCounts = menuItems.reduce<Record<'Gluten' | 'Dairy' | 'Nuts' | 'Other', number>>(
+    (acc, item) => {
+      const allergens = Array.isArray(item.allergens) ? item.allergens : [];
+      allergens.forEach((allergen) => {
+        const label =
+          typeof allergen === 'string'
+            ? normalizeAllergenName(allergen)
+            : normalizeAllergenName(allergen?.name || 'other');
+        acc[label] += 1;
+      });
+      return acc;
+    },
+    { Gluten: 0, Dairy: 0, Nuts: 0, Other: 0 }
+  );
+
+  const totalAllergenTags = Object.values(allergenCounts).reduce((sum, count) => sum + count, 0);
+  const chartSegments = (Object.entries(allergenCounts) as Array<[keyof typeof allergenCounts, number]>)
+    .filter(([, count]) => count > 0)
+    .map(([name, count]) => ({
+      name,
+      count,
+      percentage: totalAllergenTags > 0 ? Math.round((count / totalAllergenTags) * 100) : 0,
+      color: allergenColorMap[name]
+    }));
+
+  const fallbackSegments = [
+    { name: 'Gluten', count: 0, percentage: 35, color: allergenColorMap.Gluten },
+    { name: 'Dairy', count: 0, percentage: 25, color: allergenColorMap.Dairy },
+    { name: 'Nuts', count: 0, percentage: 13, color: allergenColorMap.Nuts },
+    { name: 'Other', count: 0, percentage: 27, color: allergenColorMap.Other }
   ];
+  const activeChartSegments = chartSegments.length > 0 ? chartSegments : fallbackSegments;
 
   const handleLogout = () => {
     authService.logout();
   };
 
   const displayedActivity = showAllActivity ? recentActivity : recentActivity.slice(0, 5);
-  const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+  const displayRole = formatRoleLabel(userRole);
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Top Navigation Bar */}
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="flex items-center justify-between px-6 py-4">
-          {/* Logo and Title - Only logo is clickable */}
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center hover:bg-green-600 transition cursor-pointer"
-              title="Go to Dashboard"
-            >
-              <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8.1 13.34l2.83-2.83L3.91 3.5c-1.56 1.56-1.56 4.09 0 5.66l4.19 4.18zm6.78-1.81c1.53.71 3.68.21 5.27-1.38 1.91-1.91 2.28-4.65.81-6.12-1.46-1.46-4.2-1.1-6.12.81-1.59 1.59-2.09 3.74-1.38 5.27L3.7 19.87l1.41 1.41L12 14.41l6.88 6.88 1.41-1.41L13.41 13l1.47-1.47z"/>
-              </svg>
-            </button>
-            <div className="text-left">
-              <h1 className="text-xl font-bold text-gray-800 dark:text-white">{t('smartMenu')}</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t('dashboardOverview')}</p>
-            </div>
+        <div className="flex items-center justify-between px-6 py-4 gap-4">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <AppHeaderBranding title={t('smartMenu')} subtitle={t('dashboardOverview')} />
           </div>
-
-          {/* Search Bar */}
-          <div className="hidden md:flex flex-1 max-w-md mx-8">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder={t('searchMenuItems')}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-              />
-            </div>
-          </div>
+          <WorkspaceContextBar restaurantName={restaurantName} />
 
           {/* Notifications and Profile */}
           <div className="flex items-center space-x-4">
@@ -230,7 +346,7 @@ const Dashboard: React.FC = () => {
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
         {/* Sidebar - COMPLETELY FIXED (NO SCROLL) */}
-        <aside className="w-64 bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full min-w-[16rem]">
+        <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           {/* Navigation - scrollable so Allergens & Reports always reachable */}
           <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
@@ -335,7 +451,9 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-green-700 dark:text-green-400">{t('queries')}</span>
-                <span className="text-sm font-bold text-green-900 dark:text-green-200">{mockQueriesToday}</span>
+                <span className="text-sm font-bold text-green-900 dark:text-green-200">
+                  {menuLoadsToday === null ? '—' : menuLoadsToday}
+                </span>
               </div>
             </div>
           </div>
@@ -387,7 +505,7 @@ const Dashboard: React.FC = () => {
           </div>
         </aside>
 
-        {/* Main Content - SCROLLABLE ONLY */}
+        {/* Main Content - */}
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
             {loading ? (
@@ -397,17 +515,31 @@ const Dashboard: React.FC = () => {
             ) : (
               <>
             {/* Welcome Section */}
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
+            <motion.div
+              className="mb-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.28 }}
+            >
+              <h2
+                className={`text-3xl font-bold text-gray-800 dark:text-white mb-2 transition-transform duration-300 ${
+                  welcomeAnimated ? 'animate-bounce' : ''
+                }`}
+              >
                 {t('welcomeBack')}, {userName.charAt(0).toUpperCase() + userName.slice(1)}!
               </h2>
               <p className="text-gray-600 dark:text-gray-400">{getCurrentDateTime()}</p>
-            </div>
+            </motion.div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {/* Total Menu Items - REAL DATA ✅ */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: 0.03 }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('totalMenuItems')}</p>
@@ -419,10 +551,15 @@ const Dashboard: React.FC = () => {
                     </svg>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Active Items - REAL DATA ✅ */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: 0.07 }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('activeItems')}</p>
@@ -434,14 +571,21 @@ const Dashboard: React.FC = () => {
                     </svg>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
-              {/* Queries Today - MOCK DATA (for now) */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              {/* Menu loads today — from public QR menu opens (dailyScans, UTC day). */}
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: 0.11 }}
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('queriesToday')}</p>
-                    <p className="text-4xl font-bold text-gray-800 dark:text-white">{mockQueriesToday}</p>
+                    <p className="text-4xl font-bold text-gray-800 dark:text-white">
+                      {menuLoadsToday === null ? '—' : menuLoadsToday}
+                    </p>
                   </div>
                   <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/50 rounded-xl flex items-center justify-center">
                     <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -449,14 +593,21 @@ const Dashboard: React.FC = () => {
                     </svg>
                   </div>
                 </div>
-              </div>
+              </motion.div>
 
-              {/* Most Viewed - MOCK DATA (for now) */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition">
+              {/* Top dish by detail views in the last 7 days (same source as Popular This Week). */}
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: 0.15 }}
+              >
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="min-w-0 pr-2">
                     <p className="text-gray-500 dark:text-gray-400 text-sm mb-1">{t('mostViewed')}</p>
-                    <p className="text-xl font-bold text-gray-800 dark:text-white">{mockMostViewedItem}</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-white truncate" title={mostViewedDishName || undefined}>
+                      {mostViewedDishName || '—'}
+                    </p>
                   </div>
                   <div className="w-14 h-14 bg-orange-100 dark:bg-orange-900/50 rounded-xl flex items-center justify-center">
                     <svg className="w-7 h-7 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,13 +615,125 @@ const Dashboard: React.FC = () => {
                     </svg>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
+
+            {/* Guest orders from public QR menu */}
+            <motion.div
+              className="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white">Guest orders</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Orders placed from your public menu. Update status so guests see progress on their phones.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void fetchGuestOrders()}
+                  disabled={guestOrdersLoading}
+                  className="text-sm font-semibold text-green-600 dark:text-green-400 hover:text-green-700 disabled:opacity-50"
+                >
+                  {guestOrdersLoading ? 'Refreshing…' : 'Refresh'}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                {guestOrdersLoading && guestOrders.length === 0 ? (
+                  <div className="flex justify-center py-10">
+                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-green-500 border-t-transparent" />
+                  </div>
+                ) : guestOrders.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 px-6 py-8 text-center">
+                    No guest orders yet. When customers order from the QR menu, they will appear here.
+                  </p>
+                ) : (
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-900/40 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        <th className="px-4 py-3">Time</th>
+                        <th className="px-4 py-3">Ref</th>
+                        <th className="px-4 py-3">Table</th>
+                        <th className="px-4 py-3">Items</th>
+                        <th className="px-4 py-3">Total</th>
+                        <th className="px-4 py-3 min-w-[10rem]">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                      {guestOrders.map((o) => {
+                        const created = o.createdAt ? new Date(o.createdAt) : null;
+                        const timeStr = created
+                          ? created.toLocaleString('en-GB', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : '—';
+                        const itemSummary = (o.items || [])
+                          .map((it) => `${it.quantity}× ${it.name}`)
+                          .slice(0, 2)
+                          .join(', ');
+                        const more =
+                          (o.items || []).length > 2 ? ` +${(o.items || []).length - 2} more` : '';
+                        const normalizedStatus = String(o.status || 'placed').toLowerCase();
+                        return (
+                          <tr key={o.orderId} className="text-gray-800 dark:text-gray-200">
+                            <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-400">
+                              {timeStr}
+                            </td>
+                            <td className="px-4 py-3 font-mono font-semibold">{o.orderNumber}</td>
+                            <td className="px-4 py-3">{o.tableNumber}</td>
+                            <td className="px-4 py-3 max-w-[14rem]">
+                              <span className="line-clamp-2" title={(o.items || []).map((it) => `${it.quantity}× ${it.name}`).join(', ')}>
+                                {itemSummary}
+                                {more}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-medium tabular-nums">
+                              {formatGuestOrderMoney(o.totalAmount)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <select
+                                value={
+                                  GUEST_ORDER_STATUS_OPTIONS.some((opt) => opt.value === normalizedStatus)
+                                    ? normalizedStatus
+                                    : 'placed'
+                                }
+                                onChange={(e) =>
+                                  void handleGuestOrderStatusChange(o.orderId, e.target.value)
+                                }
+                                disabled={guestOrderUpdatingId === o.orderId}
+                                className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm py-2 px-2 focus:ring-2 focus:ring-green-500/30 focus:border-green-500"
+                              >
+                                {GUEST_ORDER_STATUS_OPTIONS.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </motion.div>
 
             {/* Two Column Layout */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
               {/* Recent Activity - Left Column (2/3 width) */}
-              <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <motion.div
+                className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, delay: 0.12 }}
+              >
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('recentActivity')}</h3>
                   {recentActivity.length > 5 && (
@@ -485,10 +748,18 @@ const Dashboard: React.FC = () => {
 
                 <div className="space-y-4">
                   {displayedActivity.length > 0 ? (
-                    displayedActivity.map((activity) => {
-                      const iconStyle = getActivityIcon(activity.action);
-                      return (
-                        <div key={activity.id} className="flex items-start space-x-4 pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <AnimatePresence initial={false}>
+                      {displayedActivity.map((activity) => {
+                        const iconStyle = getActivityIcon(activity.action);
+                        return (
+                        <motion.div
+                          key={activity.id}
+                          className="flex items-start space-x-4 pb-4 border-b border-gray-100 dark:border-gray-700 last:border-0"
+                          initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+                          animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                          exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+                          transition={{ duration: 0.2 }}
+                        >
                           <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
                           <div className={`flex-shrink-0 w-10 h-10 ${iconStyle.bg} rounded-lg flex items-center justify-center ${iconStyle.color}`}>
                             {iconStyle.icon}
@@ -497,81 +768,111 @@ const Dashboard: React.FC = () => {
                             <p className="text-gray-800 dark:text-white font-medium">{activity.text}</p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{activity.time} · {activity.user}</p>
                           </div>
-                        </div>
+                        </motion.div>
                       );
-                    })
+                    })}
+                    </AnimatePresence>
                   ) : (
                     <p className="text-gray-500 dark:text-gray-400 text-center py-4">No recent activity yet. Start by adding or editing menu items!</p>
                   )}
                 </div>
-              </div>
+              </motion.div>
 
               {/* Popular This Week - Right Column (1/3 width) */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">{t('popularThisWeek')}</h3>
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, delay: 0.16 }}
+              >
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-1">{t('popularThisWeek')}</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                  Detail views on the public menu (last 7 days)
+                </p>
 
                 <div className="space-y-4">
-                  {mockPopularItems.map((item, index) => (
-                    <div key={index} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-gray-700 dark:text-gray-300 font-medium truncate mr-2">{item.name}</span>
-                        <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">{item.views}</span>
+                  {popularThisWeek.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      No dish views in the last 7 days yet. Guests opening dish details from your QR menu will show up here.
+                    </p>
+                  ) : (
+                    popularThisWeek.map((item, index) => (
+                      <div key={`${item.name}-${index}`} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700 dark:text-gray-300 font-medium truncate mr-2">{item.name}</span>
+                          <span className="text-gray-500 dark:text-gray-400 flex-shrink-0">{item.views}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                          <motion.div
+                            className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                            initial={shouldReduceMotion ? false : { width: 0 }}
+                            animate={
+                              shouldReduceMotion
+                                ? undefined
+                                : { width: `${(item.views / maxPopularViews) * 100}%` }
+                            }
+                            transition={{ duration: 0.6, delay: 0.05 * index }}
+                            style={{ width: `${(item.views / maxPopularViews) * 100}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                        <div
-                          className="bg-green-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${(item.views / 360) * 100}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-              </div>
+              </motion.div>
             </div>
 
             {/* Quick Actions */}
             <div className="mb-8">
               <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-6">{t('quickActions')}</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <button
+                <motion.button
                   onClick={() => navigate('/menu-items/new')}
                   className="bg-green-500 hover:bg-green-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
+                  whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.01 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
                   <span className="font-semibold">{t('addNewDish')}</span>
-                </button>
+                </motion.button>
 
-                <button
+                <motion.button
                   onClick={() => navigate('/allergens')}
                   className="bg-orange-500 hover:bg-orange-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
+                  whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.01 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                   </svg>
                   <span className="font-semibold">{t('updateAllergens')}</span>
-                </button>
+                </motion.button>
 
-                <button
+                <motion.button
                   onClick={() => navigate('/reports')}
                   className="bg-blue-500 hover:bg-blue-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
+                  whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.01 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                   <span className="font-semibold">{t('viewReports')}</span>
-                </button>
+                </motion.button>
 
-                <button
+                <motion.button
                   onClick={() => navigate('/staff')}
                   className="bg-purple-500 hover:bg-purple-600 text-white rounded-xl p-6 flex flex-col items-center justify-center space-y-3 transition shadow-sm hover:shadow-md"
+                  whileHover={shouldReduceMotion ? undefined : { y: -3, scale: 1.01 }}
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                   </svg>
                   <span className="font-semibold">{t('manageStaff')}</span>
-                </button>
+                </motion.button>
               </div>
             </div>
 
@@ -583,56 +884,30 @@ const Dashboard: React.FC = () => {
                 {/* Donut Chart */}
                 <div className="relative w-64 h-64 flex-shrink-0">
                   <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    {/* Red - Gluten 35% */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#EF4444"
-                      strokeWidth="20"
-                      strokeDasharray={`${35 * 2.51} ${(100-35) * 2.51}`}
-                      strokeDashoffset="0"
-                    />
-                    {/* Orange - Dairy 25% */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#F59E0B"
-                      strokeWidth="20"
-                      strokeDasharray={`${25 * 2.51} ${(100-25) * 2.51}`}
-                      strokeDashoffset={`-${35 * 2.51}`}
-                    />
-                    {/* Blue - Other 27% */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#3B82F6"
-                      strokeWidth="20"
-                      strokeDasharray={`${27 * 2.51} ${(100-27) * 2.51}`}
-                      strokeDashoffset={`-${(35+25) * 2.51}`}
-                    />
-                    {/* Gray - Nuts 13% */}
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="40"
-                      fill="none"
-                      stroke="#6B7280"
-                      strokeWidth="20"
-                      strokeDasharray={`${13 * 2.51} ${(100-13) * 2.51}`}
-                      strokeDashoffset={`-${(35+25+27) * 2.51}`}
-                    />
+                    {activeChartSegments.map((segment, index) => {
+                      const previousPercentage = activeChartSegments
+                        .slice(0, index)
+                        .reduce((sum, seg) => sum + seg.percentage, 0);
+                      return (
+                        <circle
+                          key={segment.name}
+                          cx="50"
+                          cy="50"
+                          r="40"
+                          fill="none"
+                          stroke={segment.color}
+                          strokeWidth="20"
+                          strokeDasharray={`${segment.percentage * 2.51} ${(100 - segment.percentage) * 2.51}`}
+                          strokeDashoffset={`-${previousPercentage * 2.51}`}
+                        />
+                      );
+                    })}
                   </svg>
                 </div>
 
                 {/* Legend - Stacked Vertically */}
                 <div className="space-y-4">
-                  {mockAllergenData.map((allergen, index) => (
+                  {activeChartSegments.map((allergen, index) => (
                     <div key={index} className="flex items-center space-x-4">
                       <div
                         className="w-4 h-4 rounded-full flex-shrink-0"
@@ -646,6 +921,11 @@ const Dashboard: React.FC = () => {
                   ))}
                 </div>
               </div>
+              {totalAllergenTags > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-6 text-center">
+                  Based on {totalAllergenTags} allergen tags across your current menu.
+                </p>
+              )}
             </div>
               </>
             )}

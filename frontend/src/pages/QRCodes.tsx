@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import QRCodeLib from 'qrcode';
+import { jsPDF } from 'jspdf';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import ProfileDropdown from '../components/ProfileDropdown';
@@ -141,7 +142,13 @@ const QRCodes: React.FC = () => {
   const [includeLogo, setIncludeLogo] = useState(false);
   const [color, setColor] = useState('#000000');
   const [scanAnalytics, setScanAnalytics] = useState<{ date: string; label: string; count: number }[]>([]);
-  const [scanSummary, setScanSummary] = useState<{ totalScansLast30?: number }>({});
+  const [scanSummary, setScanSummary] = useState<{
+    totalScans?: number;
+    uniqueVisitors?: number;
+    avgTimeSeconds?: number;
+    conversions?: number;
+    totalScansLast30?: number;
+  }>({});
   const isFirstSizeColor = useRef(true);
 
   const initialUrls = initialPublicUrlPair();
@@ -174,9 +181,12 @@ const QRCodes: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await qrService.getScanAnalytics();
-        setScanAnalytics(res?.data ?? []);
-        setScanSummary(res?.summary ?? {});
+        const [week, month] = await Promise.all([
+          qrService.getScanAnalytics({ range: '7d' }),
+          qrService.getScanAnalytics({ range: '30d' })
+        ]);
+        setScanAnalytics(week?.data ?? []);
+        setScanSummary(month?.summary ?? {});
       } catch {
         setScanAnalytics([]);
         setScanSummary({});
@@ -189,6 +199,69 @@ const QRCodes: React.FC = () => {
     'Small (200x200)': 200,
     'Medium (250x250)': 250,
     'Large (300x300)': 300
+  };
+
+  const formatDuration = (sec: number) => {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const handleDownloadQr = async () => {
+    const menuUrl = qrCodeUrl?.trim();
+    if (!menuUrl?.startsWith('http')) {
+      toast.error('Generate the QR code first.');
+      return;
+    }
+    const width = sizeToWidth[size] ?? 300;
+    const colorHex = color || '#000000';
+    const safeName = (restaurantName || 'menu').replace(/[^\w-]+/g, '-').slice(0, 48);
+    try {
+      if (format === 'PNG') {
+        const dataUrl = await renderQrDataUrl(menuUrl, width, colorHex);
+        if (!dataUrl) throw new Error('png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `${safeName}-qr.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        toast.success('PNG downloaded');
+        return;
+      }
+      if (format === 'SVG') {
+        const svg = await QRCodeLib.toString(menuUrl, {
+          type: 'svg',
+          width,
+          margin: 2,
+          errorCorrectionLevel: 'H',
+          color: { dark: colorHex, light: '#FFFFFF' }
+        });
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}-qr.svg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        toast.success('SVG downloaded');
+        return;
+      }
+      const dataUrl = await renderQrDataUrl(menuUrl, width, colorHex);
+      if (!dataUrl) throw new Error('pdf');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const margin = 25;
+      const imgMm = Math.min(pageW - 2 * margin, 95);
+      pdf.addImage(dataUrl, 'PNG', margin, margin, imgMm, imgMm);
+      pdf.save(`${safeName}-qr.pdf`);
+      toast.success('PDF downloaded');
+    } catch {
+      toast.error('Could not create the file. Try Regenerate, then download again.');
+    }
   };
 
   const generateQRCode = async () => {
@@ -434,19 +507,15 @@ const QRCodes: React.FC = () => {
 
                   <div className="mt-5 flex flex-wrap gap-2 justify-center">
                     <button
-                      onClick={() =>
-                        qrService.downloadQR(
-                          publicWebsiteUrl.trim().replace(/\/$/, ''),
-                          publicApiBaseUrl.trim().replace(/\/$/, '')
-                        )
-                      }
+                      type="button"
+                      onClick={() => handleDownloadQr()}
                       disabled={qrLoading}
                       className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-50"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M4 12l1.41 1.41L11 7.83V20h2V7.83l5.59 5.58L20 12" />
                       </svg>
-                      Download QR Code
+                      Download ({format})
                     </button>
                     <button
                       onClick={() => window.print()}
@@ -512,25 +581,33 @@ const QRCodes: React.FC = () => {
 
                 <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-5">
                   <h4 className="font-semibold text-gray-800 dark:text-white">QR Code Scans</h4>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">Last 30 days</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">Last 30 days (menu opens via QR)</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Total Scans</p>
                       <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
-                        {typeof scanSummary.totalScansLast30 === 'number' ? scanSummary.totalScansLast30 : '0'}
+                        {typeof scanSummary.totalScans === 'number' ? scanSummary.totalScans : '0'}
                       </p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Unique Visitors</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="First visit per device, per day">
+                        {typeof scanSummary.uniqueVisitors === 'number' ? scanSummary.uniqueVisitors : '0'}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Avg Time</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Average session length when guests leave the menu">
+                        {typeof scanSummary.avgTimeSeconds === 'number' && scanSummary.avgTimeSeconds > 0
+                          ? formatDuration(scanSummary.avgTimeSeconds)
+                          : '—'}
+                      </p>
                     </div>
                     <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
                       <p className="text-xs text-gray-500 dark:text-gray-400">Conversions</p>
-                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Not tracked yet">—</p>
+                      <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1" title="Orders placed from the public menu">
+                        {typeof scanSummary.conversions === 'number' ? scanSummary.conversions : '0'}
+                      </p>
                     </div>
                   </div>
                 </div>

@@ -38,6 +38,11 @@ web-build/
 .expo/
 .expo-shared/
 
+# Playwright (browsers are downloaded locally; do not commit)
+.playwright-browsers/
+playwright-report/
+test-results/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -5,6 +5,8 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import Login from './pages/Login';
 import PlatformLogin from './pages/PlatformLogin';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import PlatformDashboard from './pages/PlatformDashboard';
 import Menu from './pages/Menu';
@@ -107,6 +109,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/platform/login" element={<PlatformLogin />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/public/menu/:restaurantId" element={<PublicMenu />} />
 
         {/* Protected Routes */}
