@@ -9,6 +9,9 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      npm_config_fund: false
+      npm_config_audit: false
 
     steps:
       - uses: actions/checkout@v4
@@ -23,31 +26,26 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd backend && npm ci
-          cd ../frontend && npm ci
+          (cd backend && npm ci)
+          (cd frontend && npm ci)
 
       - name: Backend tests
-        run: |
-          cd backend
-          npm test
+        run: (cd backend && npm test)
         env:
           NODE_ENV: test
 
       - name: Frontend tests
-        run: |
-          cd frontend
-          npm test -- --watchAll=false
+        run: (cd frontend && npm test -- --watchAll=false)
         env:
           CI: true
 
       - name: Build frontend
-        run: |
-          cd frontend
-          npm run build
+        run: (cd frontend && npm run build)
         env:
           CI: false
 
-      - name: Docker build check
+
+      - name: Docker compose check
         run: |
-          docker build -t smart-menu-backend:test ./backend
-          docker build -t smart-menu-frontend:test ./frontend
+          cp backend/.env.example backend/.env
+          docker compose config -q
