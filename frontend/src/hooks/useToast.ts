@@ -4,18 +4,22 @@ import { ToastType } from '../components/Toast';
 interface ToastState {
   message: string;
   type: ToastType;
-  id: number;
+  id: string;
 }
 
 export const useToast = () => {
   const [toasts, setToasts] = useState<ToastState[]>([]);
+  const createToastId = () =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
-    const id = Date.now();
+    const id = createToastId();
     setToasts(prev => [...prev, { message, type, id }]);
   }, []);
 
-  const removeToast = useCallback((id: number) => {
+  const removeToast = useCallback((id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   }, []);
 

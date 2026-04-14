@@ -40,7 +40,6 @@ const Profile: React.FC = () => {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Profile state
   const [profile, setProfile] = useState<UserProfile>({
     name: '',
     email: '',
@@ -49,7 +48,6 @@ const Profile: React.FC = () => {
     confirmPassword: ''
   });
 
-  // Preferences state
   const [preferences, setPreferences] = useState<Preferences>({
     emailNotifications: true,
     orderAlerts: true,
@@ -61,7 +59,6 @@ const Profile: React.FC = () => {
     timezone: 'Europe/London'
   });
 
-  // Restaurant info (read-only display)
   const restaurantName = localStorage.getItem('restaurantName') || 'Your Restaurant';
   const userRole = localStorage.getItem('userRole') || 'staff';
 
@@ -117,19 +114,21 @@ const Profile: React.FC = () => {
   const loadPreferences = () => {
     const savedPrefs = localStorage.getItem('userPreferences');
     if (savedPrefs) {
-      const prefs = JSON.parse(savedPrefs);
-      setPreferences(prefs);
-      
-      // Apply dark mode on load
-      if (prefs.darkMode) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      
-      // Apply language on load
-      if (prefs.language) {
-        document.documentElement.lang = prefs.language;
+      try {
+        const prefs = JSON.parse(savedPrefs);
+        setPreferences(prefs);
+
+        if (prefs.darkMode) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+
+        if (prefs.language) {
+          document.documentElement.lang = prefs.language;
+        }
+      } catch {
+        // Ignore malformed local preferences and continue with defaults.
       }
     }
   };

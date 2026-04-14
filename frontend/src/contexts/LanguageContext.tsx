@@ -56,7 +56,8 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
       }
     };
 
-    // Check for changes periodically (for same-window updates)
+    // The browser "storage" event does not fire in the same tab that wrote localStorage.
+    // Polling keeps language state in sync when Profile updates preferences in-place.
     const interval = setInterval(handleStorageChange, 500);
     window.addEventListener('storage', handleStorageChange);
 
@@ -77,7 +78,14 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     // Update localStorage
     const savedPrefs = localStorage.getItem('userPreferences');
-    const prefs = savedPrefs ? JSON.parse(savedPrefs) : {};
+    let prefs: Record<string, unknown> = {};
+    if (savedPrefs) {
+      try {
+        prefs = JSON.parse(savedPrefs);
+      } catch {
+        prefs = {};
+      }
+    }
     prefs.language = lang;
     localStorage.setItem('userPreferences', JSON.stringify(prefs));
   };

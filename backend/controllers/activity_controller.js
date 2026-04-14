@@ -5,9 +5,17 @@ const Activity = require('../models/Activity');
 // @access  Private
 exports.getActivities = async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
+    const requested = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 100) : 10;
+    // Workspace context is resolved by auth middleware and can differ from user.restaurantId.
+    if (!req.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select an active restaurant workspace before viewing activity'
+      });
+    }
 
-    const activities = await Activity.find({ restaurantId: req.user.restaurantId })
+    const activities = await Activity.find({ restaurantId: req.restaurantId })
       .sort({ createdAt: -1 })
       .limit(limit);
 
@@ -36,9 +44,15 @@ exports.getActivities = async (req, res, next) => {
 exports.logActivity = async (req, res, next) => {
   try {
     const { action, itemName, emoji, details } = req.body;
+    if (!req.restaurantId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Select an active restaurant workspace before logging activity'
+      });
+    }
 
     const activity = await Activity.create({
-      restaurantId: req.user.restaurantId,
+      restaurantId: req.restaurantId,
       userId: req.user.id,
       userName: req.user.name || req.user.email.split('@')[0],
       action,

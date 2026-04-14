@@ -10,9 +10,15 @@ const normalizeRole = (role) => (isPlatformAdminRole(role) ? 'platform_admin' : 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+const getChallengeSigningSecret = () => {
+  if (!isNonEmptyString(process.env.JWT_SECRET)) {
+    throw new Error('JWT_SECRET is required for login challenge signing');
+  }
+  return process.env.JWT_SECRET.trim();
+};
 const signShortToken = (payload) =>
   crypto
-    .createHmac('sha256', process.env.JWT_SECRET || 'smart-menu-secret')
+    .createHmac('sha256', getChallengeSigningSecret())
     .update(JSON.stringify(payload))
     .digest('hex');
 
@@ -95,7 +101,7 @@ exports.register = async (req, res, next) => {
       }
     });
 
-    // 🆕 GENERATE QR CODE (auto-generated as requested by supervisor)
+    // Store default public menu link used across staff/public flows.
     const qrCodeUrl = `https://smartmenu.app/menu/${restaurant._id}`;
     restaurant.qrCode = qrCodeUrl;
     await restaurant.save();
@@ -131,7 +137,7 @@ exports.register = async (req, res, next) => {
         permissions: getEffectivePermissions(user),
         restaurantId: restaurant._id,
         restaurantName: restaurant.name,
-        qrCode: restaurant.qrCode // 🆕 Include QR code in response
+        qrCode: restaurant.qrCode
       }
     });
   } catch (error) {
@@ -163,6 +169,7 @@ exports.login = async (req, res, next) => {
 
     // Check for user (include password field)
     let userQuery = User.findOne({ email: normalizedEmail }).select('+password');
+    // Guarded populate keeps tests stable when mocked queries only implement part of mongoose chain.
     if (typeof userQuery.populate === 'function') {
       userQuery = userQuery.populate('restaurantId', 'name qrCode');
       if (typeof userQuery.populate === 'function') {
@@ -500,7 +507,7 @@ exports.reactivate = async (req, res, next) => {
   }
 };
 
-// @desc    Request a password reset token (dev returns token link)
+// @desc    Request a password reset token
 // @route   POST /api/auth/forgot-password
 // @access  Public
 exports.forgotPassword = async (req, res, next) => {
@@ -522,11 +529,11 @@ exports.forgotPassword = async (req, res, next) => {
 
     const frontendBase = (process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/$/, '');
     const resetUrl = `${frontendBase}/reset-password?token=${rawToken}`;
+    const allowDebugResetUrl = process.env.ALLOW_INSECURE_PASSWORD_RESET_DEBUG === 'true';
     return res.status(200).json({
       success: true,
       message: 'Password reset requested',
-      // In production integrate email provider and omit this field
-      data: { resetUrl }
+      ...(allowDebugResetUrl ? { data: { resetUrl } } : {})
     });
   } catch (error) {
     next(error);
@@ -673,6 +680,7 @@ exports.verifyTwoFactorLogin = async (req, res, next) => {
     if (expected !== sig) return res.status(400).json({ success: false, message: 'Invalid challenge token' });
 
     let userQuery = User.findById(uid).select('+twoFactorSecret');
+    // Guarded populate keeps tests stable when mocked queries only implement part of mongoose chain.
     if (typeof userQuery.populate === 'function') {
       userQuery = userQuery.populate('restaurantId', 'name qrCode');
       if (typeof userQuery.populate === 'function') {

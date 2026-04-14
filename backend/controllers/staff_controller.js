@@ -3,6 +3,7 @@ const Restaurant = require('../models/Restaurant');
 const { createNotification } = require('../utils/notificationHelper');
 
 const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'super_owner';
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
 const RESTAURANT_TEAM_ROLES = ['owner', 'manager', 'staff'];
 
@@ -100,9 +101,10 @@ exports.getStaff = async (req, res, next) => {
 exports.addStaff = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
     // Validation
-    if (!name || !email || !password || !role) {
+    if (!name || !normalizedEmail || !password || !role) {
       return res.status(400).json({
         success: false,
         message: 'Please provide name, email, password, and role'
@@ -126,7 +128,7 @@ exports.addStaff = async (req, res, next) => {
     }
 
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -138,7 +140,7 @@ exports.addStaff = async (req, res, next) => {
     const staff = await User.create({
       restaurantId: req.restaurantId,
       name,
-      email,
+      email: normalizedEmail,
       password,
       role,
       invitationAccepted: false // New invites need to be accepted
@@ -164,11 +166,7 @@ exports.addStaff = async (req, res, next) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error adding staff',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -178,6 +176,7 @@ exports.addStaff = async (req, res, next) => {
 exports.updateStaff = async (req, res, next) => {
   try {
     const { name, email, role, isActive } = req.body;
+    const normalizedEmail = email ? normalizeEmail(email) : '';
 
     // Find staff member
     const staff = await User.findOne({
@@ -206,7 +205,7 @@ exports.updateStaff = async (req, res, next) => {
         });
       }
       if (name) staff.name = name;
-      if (email) staff.email = email;
+      if (normalizedEmail) staff.email = normalizedEmail;
       if (typeof isActive === 'boolean') staff.isActive = isActive;
       const targetRestaurantId = staff.restaurantId || req.restaurantId;
       await staff.save();
@@ -238,7 +237,7 @@ exports.updateStaff = async (req, res, next) => {
     }
 
     if (name) staff.name = name;
-    if (email) staff.email = email;
+    if (normalizedEmail) staff.email = normalizedEmail;
     if (role) staff.role = role;
     if (typeof isActive === 'boolean') staff.isActive = isActive;
 
@@ -264,11 +263,7 @@ exports.updateStaff = async (req, res, next) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error updating staff',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -316,11 +311,7 @@ exports.deleteStaff = async (req, res, next) => {
       message: 'Staff member deleted successfully'
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error deleting staff',
-      error: error.message
-    });
+    next(error);
   }
 };
 
@@ -376,10 +367,6 @@ exports.acceptInvitation = async (req, res, next) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error accepting invitation',
-      error: error.message
-    });
+    next(error);
   }
 };

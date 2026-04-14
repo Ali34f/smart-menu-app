@@ -267,11 +267,11 @@ function App() {
           }
         />
 
-        {/* Default Route - Redirect to Login */}
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        
-        {/* Catch All - Redirect to Login */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* Default Route */}
+        <Route path="/" element={<Navigate to={isAuthenticated() ? '/dashboard' : '/login'} replace />} />
+
+        {/* Catch All Route */}
+        <Route path="*" element={<Navigate to={isAuthenticated() ? '/dashboard' : '/login'} replace />} />
         </Routes>
       </Router>
     </LanguageProvider>

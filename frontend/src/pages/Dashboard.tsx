@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
@@ -122,8 +122,6 @@ const getActivityIcon = (action: string) => {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const isAllergensPage = location.pathname === '/allergens';
   const { t } = useLanguage();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
@@ -345,12 +343,11 @@ const Dashboard: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        {/* Sidebar - COMPLETELY FIXED (NO SCROLL) */}
+        {/* Sidebar */}
         <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           {/* Navigation - scrollable so Allergens & Reports always reachable */}
           <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
-              {/* Dashboard */}
               <button className="w-full flex items-center space-x-4 px-4 py-3 bg-green-500 text-white rounded-lg font-medium text-sm">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -358,7 +355,6 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('dashboard')}</span>
               </button>
 
-              {/* Menu Items */}
               <button
                 onClick={() => navigate('/menu-items')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -367,18 +363,14 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('menuItems')}</span>
               </button>
 
-              {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
-                  isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
+                className="w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
-                <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
+                <ShieldCheckIcon size={20} className="flex-shrink-0 text-gray-700 dark:text-gray-300" />
                 <span className="flex-1 text-left">{t('allergens')}</span>
               </button>
 
-              {/* Ingredients */}
               <button
                 onClick={() => navigate('/ingredients')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -387,7 +379,6 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('ingredients')}</span>
               </button>
 
-              {/* Staff Management */}
               <button
                 onClick={() => navigate('/staff')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -398,7 +389,6 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('staffManagement')}</span>
               </button>
 
-              {/* QR Codes */}
               <button
                 onClick={() => navigate('/qr-codes')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -412,7 +402,6 @@ const Dashboard: React.FC = () => {
 
             {/* Reports & Settings */}
             <div className="space-y-2 pt-4 mt-auto flex-shrink-0">
-              {/* Reports */}
               <button
                 onClick={() => navigate('/reports')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -423,7 +412,6 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('reports')}</span>
               </button>
 
-              {/* Settings */}
               <button
                 onClick={() => navigate('/settings')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -533,7 +521,6 @@ const Dashboard: React.FC = () => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {/* Total Menu Items - REAL DATA ✅ */}
               <motion.div
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
@@ -553,7 +540,6 @@ const Dashboard: React.FC = () => {
                 </div>
               </motion.div>
 
-              {/* Active Items - REAL DATA ✅ */}
               <motion.div
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
