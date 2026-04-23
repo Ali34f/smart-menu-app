@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { allergenService } from '../services/allergenService';
 import { menuService } from '../services/menuService';
 import { activityService } from '../services/activityService';
@@ -200,6 +201,8 @@ const Allergens: React.FC = () => {
   };
 
   const displayRole = formatRoleLabel(userRole);
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10">
@@ -330,7 +333,12 @@ const Allergens: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
-            <div className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+            <motion.div
+              className="flex items-start justify-between gap-4 mb-6 flex-wrap"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <div>
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Allergen Management</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">UK Food Information Regulations 2014</p>
@@ -353,9 +361,14 @@ const Allergens: React.FC = () => {
                   <span>Review Now</span>
                 </button>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="flex gap-8">
+            <motion.div
+              className="flex gap-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
               <div className="flex-1 min-w-0">
                 <section className="mb-8">
                   <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">The 14 UK Allergens</h3>
@@ -534,7 +547,7 @@ const Allergens: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           </div>
         </main>
       </div>

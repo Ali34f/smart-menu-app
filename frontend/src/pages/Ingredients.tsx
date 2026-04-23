@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import { ingredientService } from '../services/ingredientService';
 import { authService } from '../services/authService';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
@@ -326,6 +327,7 @@ const Ingredients: React.FC = () => {
   const handleLogout = () => authService.logout();
 
   const allowIngEdit = canEditIngredients();
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <>
@@ -472,7 +474,12 @@ const Ingredients: React.FC = () => {
               ) : (
                 <>
               {/* Page Title and Action Button - full width row like Menu Items / Staff */}
-              <div className="flex items-center justify-between mb-6">
+              <motion.div
+                className="flex items-center justify-between mb-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26 }}
+              >
                 <div>
                   <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{t('ingredientsManagement')}</h2>
                   <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage your ingredient library and allergen links</p>
@@ -489,12 +496,17 @@ const Ingredients: React.FC = () => {
                     <span>{t('addNewIngredient')}</span>
                   </button>
                 )}
-              </div>
+              </motion.div>
 
               {/* Main content: table (left) + stats panel (right) */}
               <div className="flex gap-8">
                 <div className="flex-1 min-w-0">
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6">
+                  <motion.div
+                    className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 mb-6"
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                    animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                    transition={{ duration: 0.26, delay: 0.06 }}
+                  >
                   <div className="flex items-center space-x-4">
                     <div className="flex-1">
                       <div className="relative">
@@ -544,9 +556,14 @@ const Ingredients: React.FC = () => {
                       </button>
                     )}
                   </div>
-                </div>
+                  </motion.div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+                <motion.div
+                  className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden"
+                  initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                  animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                  transition={{ duration: 0.26, delay: 0.1 }}
+                >
                   {allowIngCreateDelete && selectedIngredientIds.size > 0 && (
                     <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gray-50/50 dark:bg-gray-700/20">
                       <div className="text-sm text-gray-700 dark:text-gray-200">
@@ -788,10 +805,15 @@ const Ingredients: React.FC = () => {
                       </div>
                     </div>
                   )}
-                </div>
+                </motion.div>
               </div>
 
-              <div className="w-80 flex-shrink-0 space-y-6">
+              <motion.div
+                className="w-80 flex-shrink-0 space-y-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, delay: 0.12 }}
+              >
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
                   <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">{t('quickStats')}</h3>
                   <div className="space-y-3">
@@ -883,7 +905,7 @@ const Ingredients: React.FC = () => {
                     )}
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </div>
                 </> )}
             </div>

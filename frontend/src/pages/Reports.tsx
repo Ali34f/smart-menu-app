@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import Icon from '@mdi/react';
 import { mdiSilverwareForkKnife, mdiLeaf } from '@mdi/js';
 import {
@@ -220,6 +221,7 @@ const Reports: React.FC = () => {
   };
 
   const compliancePct = compliance?.menuItemsTaggedPct ?? 0;
+  const shouldReduceMotion = useReducedMotion();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
@@ -316,7 +318,12 @@ const Reports: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
-            <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
+            <motion.div
+              className="flex items-center justify-between gap-4 flex-wrap mb-6"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <div>
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Reports & Analytics</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -373,14 +380,18 @@ const Reports: React.FC = () => {
                   Export CSV
                 </button>
               </div>
-            </div>
+            </motion.div>
 
             {loading ? (
               <div className="flex justify-center py-20">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500" />
               </div>
             ) : (
-              <>
+              <motion.div
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, delay: 0.05 }}
+              >
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-800 dark:text-white">Top Performing Dishes</h3>
@@ -603,7 +614,7 @@ const Reports: React.FC = () => {
                     </>
                   )}
                 </section>
-              </>
+              </motion.div>
             )}
           </div>
         </main>

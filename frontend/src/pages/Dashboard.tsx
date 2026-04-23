@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { authService } from '../services/authService';
 import { menuService } from '../services/menuService';
@@ -50,6 +50,10 @@ interface MenuItem {
   allergens?: Array<{ _id?: string; name?: string } | string>;
 }
 
+const FILTER_BAR_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#94a3b8'];
+
+/** Circumference of a circle with radius `r` in the same units as the SVG viewBox. */
+const circleCircumference = (r: number) => 2 * Math.PI * r;
 
 const getActivityIcon = (action: string) => {
   const iconConfig: Record<string, { bg: string; color: string; icon: React.ReactNode }> = {
@@ -122,6 +126,8 @@ const getActivityIcon = (action: string) => {
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isAllergensPage = location.pathname === '/allergens';
   const { t } = useLanguage();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
@@ -142,6 +148,8 @@ const Dashboard: React.FC = () => {
   const [guestOrders, setGuestOrders] = useState<GuestOrderRow[]>([]);
   const [guestOrdersLoading, setGuestOrdersLoading] = useState(false);
   const [guestOrderUpdatingId, setGuestOrderUpdatingId] = useState<string | null>(null);
+  /** All-time guest “exclude allergen” counts from public menu (Restaurant.allergenFilterUsage). */
+  const [allergenFilterUsage, setAllergenFilterUsage] = useState<Array<{ name: string; value: number; color: string }>>([]);
 
   useEffect(() => {
     const savedPic = localStorage.getItem('profilePicture');
@@ -189,11 +197,12 @@ const Dashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [menuData, activities, reportsRes, scansRes] = await Promise.all([
+      const [menuData, activities, reportsRes, scansRes, filterAnalyticsRes] = await Promise.all([
         menuService.getAllItems(),
         activityService.getActivities(50),
         qrService.getRestaurantReports({ range: '7d' }).catch(() => null),
-        qrService.getScanAnalytics({ range: '7d' }).catch(() => null)
+        qrService.getScanAnalytics({ range: '7d' }).catch(() => null),
+        qrService.getAllergenFilterAnalytics().catch(() => null)
       ]);
       setMenuItems(menuData.data || []);
       setRecentActivity(activities || []);
@@ -220,6 +229,15 @@ const Dashboard: React.FC = () => {
       } else {
         setMenuLoadsToday(null);
       }
+
+      const filterRows = Array.isArray(filterAnalyticsRes?.data) ? filterAnalyticsRes.data : [];
+      setAllergenFilterUsage(
+        filterRows.map((row: { name?: string; value?: number }, idx: number) => ({
+          name: String(row?.name || '').trim() || 'Unknown',
+          value: Math.max(0, Number(row?.value) || 0),
+          color: FILTER_BAR_COLORS[idx % FILTER_BAR_COLORS.length]
+        }))
+      );
     } catch (error: any) {
       console.error('Error fetching dashboard data:', error);
 
@@ -293,22 +311,19 @@ const Dashboard: React.FC = () => {
   );
 
   const totalAllergenTags = Object.values(allergenCounts).reduce((sum, count) => sum + count, 0);
-  const chartSegments = (Object.entries(allergenCounts) as Array<[keyof typeof allergenCounts, number]>)
+  const menuMixSegments = (Object.entries(allergenCounts) as Array<[keyof typeof allergenCounts, number]>)
     .filter(([, count]) => count > 0)
     .map(([name, count]) => ({
       name,
       count,
-      percentage: totalAllergenTags > 0 ? Math.round((count / totalAllergenTags) * 100) : 0,
-      color: allergenColorMap[name]
+      color: allergenColorMap[name],
+      fraction: totalAllergenTags > 0 ? count / totalAllergenTags : 0,
+      percentage: totalAllergenTags > 0 ? Math.round((count / totalAllergenTags) * 100) : 0
     }));
 
-  const fallbackSegments = [
-    { name: 'Gluten', count: 0, percentage: 35, color: allergenColorMap.Gluten },
-    { name: 'Dairy', count: 0, percentage: 25, color: allergenColorMap.Dairy },
-    { name: 'Nuts', count: 0, percentage: 13, color: allergenColorMap.Nuts },
-    { name: 'Other', count: 0, percentage: 27, color: allergenColorMap.Other }
-  ];
-  const activeChartSegments = chartSegments.length > 0 ? chartSegments : fallbackSegments;
+  const maxFilterUses = Math.max(1, ...allergenFilterUsage.map((r) => r.value));
+  const donutRadius = 40;
+  const donutCirc = circleCircumference(donutRadius);
 
   const handleLogout = () => {
     authService.logout();
@@ -343,11 +358,12 @@ const Dashboard: React.FC = () => {
       </header>
 
       <div className="flex flex-1 h-[calc(100vh-80px)]">
-        {/* Sidebar */}
+        {/* Sidebar - COMPLETELY FIXED (NO SCROLL) */}
         <aside className="bg-white dark:bg-gray-800 shadow-sm flex flex-col h-full flex-shrink-0 border-r border-gray-200 dark:border-gray-700 w-64 min-w-[16rem]">
           {/* Navigation - scrollable so Allergens & Reports always reachable */}
           <nav className="p-6 flex flex-col flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-2">
+              {/* Dashboard */}
               <button className="w-full flex items-center space-x-4 px-4 py-3 bg-green-500 text-white rounded-lg font-medium text-sm">
                 <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
@@ -355,6 +371,7 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('dashboard')}</span>
               </button>
 
+              {/* Menu Items */}
               <button
                 onClick={() => navigate('/menu-items')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -363,14 +380,18 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('menuItems')}</span>
               </button>
 
+              {/* Allergens */}
               <button
                 onClick={() => navigate('/allergens')}
-                className="w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                className={`w-full flex items-center space-x-4 px-4 py-3 rounded-lg font-medium text-sm transition ${
+                  isAllergensPage ? 'bg-green-500 text-white shadow-sm' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
               >
-                <ShieldCheckIcon size={20} className="flex-shrink-0 text-gray-700 dark:text-gray-300" />
+                <ShieldCheckIcon size={20} className={`flex-shrink-0 ${isAllergensPage ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`} />
                 <span className="flex-1 text-left">{t('allergens')}</span>
               </button>
 
+              {/* Ingredients */}
               <button
                 onClick={() => navigate('/ingredients')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -379,6 +400,7 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('ingredients')}</span>
               </button>
 
+              {/* Staff Management */}
               <button
                 onClick={() => navigate('/staff')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -389,6 +411,7 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('staffManagement')}</span>
               </button>
 
+              {/* QR Codes */}
               <button
                 onClick={() => navigate('/qr-codes')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -402,6 +425,7 @@ const Dashboard: React.FC = () => {
 
             {/* Reports & Settings */}
             <div className="space-y-2 pt-4 mt-auto flex-shrink-0">
+              {/* Reports */}
               <button
                 onClick={() => navigate('/reports')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -412,6 +436,7 @@ const Dashboard: React.FC = () => {
                 <span className="flex-1 text-left">{t('reports')}</span>
               </button>
 
+              {/* Settings */}
               <button
                 onClick={() => navigate('/settings')}
                 className="w-full flex items-center space-x-4 px-4 py-3 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium text-sm transition"
@@ -521,6 +546,7 @@ const Dashboard: React.FC = () => {
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              {/* Total Menu Items - REAL DATA ✅ */}
               <motion.div
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
@@ -540,6 +566,7 @@ const Dashboard: React.FC = () => {
                 </div>
               </motion.div>
 
+              {/* Active Items - REAL DATA ✅ */}
               <motion.div
                 className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 hover:shadow-md transition"
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
@@ -862,56 +889,111 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Most Filtered Allergens - Donut Chart */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
-              <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-8">{t('mostFilteredAllergens')}</h3>
+            {/* Allergen analytics: guest filters (real usage) + menu mix (donut) */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, delay: 0.08 }}
+              >
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('mostFilteredAllergens')}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{t('mostFilteredAllergensHelp')}</p>
 
-              <div className="flex flex-col md:flex-row items-center justify-center gap-12">
-                {/* Donut Chart */}
-                <div className="relative w-64 h-64 flex-shrink-0">
-                  <svg viewBox="0 0 100 100" className="transform -rotate-90">
-                    {activeChartSegments.map((segment, index) => {
-                      const previousPercentage = activeChartSegments
-                        .slice(0, index)
-                        .reduce((sum, seg) => sum + seg.percentage, 0);
-                      return (
-                        <circle
-                          key={segment.name}
-                          cx="50"
-                          cy="50"
-                          r="40"
-                          fill="none"
-                          stroke={segment.color}
-                          strokeWidth="20"
-                          strokeDasharray={`${segment.percentage * 2.51} ${(100 - segment.percentage) * 2.51}`}
-                          strokeDashoffset={`-${previousPercentage * 2.51}`}
-                        />
-                      );
-                    })}
-                  </svg>
-                </div>
+                {allergenFilterUsage.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-6 py-4">{t('noAllergenFilterUsageYet')}</p>
+                ) : (
+                  <ul className="mt-6 space-y-4 max-h-[22rem] overflow-y-auto pr-1">
+                    {allergenFilterUsage.map((row, idx) => (
+                      <li key={`${row.name}-${idx}`} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-medium text-gray-800 dark:text-white truncate min-w-0" title={row.name}>
+                            {row.name}
+                          </span>
+                          <span className="tabular-nums text-gray-600 dark:text-gray-400 flex-shrink-0">{row.value}</span>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-[width] duration-500 ease-out"
+                            style={{
+                              width: `${(row.value / maxFilterUses) * 100}%`,
+                              backgroundColor: row.color
+                            }}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </motion.div>
 
-                {/* Legend - Stacked Vertically */}
-                <div className="space-y-4">
-                  {activeChartSegments.map((allergen, index) => (
-                    <div key={index} className="flex items-center space-x-4">
-                      <div
-                        className="w-4 h-4 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: allergen.color }}
-                      ></div>
-                      <div className="flex items-center justify-between min-w-[120px]">
-                        <span className="text-gray-700 dark:text-gray-300 font-medium">{allergen.name}</span>
-                        <span className="text-gray-600 dark:text-gray-400 font-semibold ml-4">{allergen.percentage}%</span>
-                      </div>
+              <motion.div
+                className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-6"
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+                animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+                transition={{ duration: 0.26, delay: 0.12 }}
+              >
+                <h3 className="text-xl font-bold text-gray-800 dark:text-white">{t('allergenDistributionTitle')}</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">{t('allergenDistributionHelp')}</p>
+
+                {menuMixSegments.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-6 py-4">{t('noTaggedAllergensOnMenu')}</p>
+                ) : (
+                  <div className="mt-6 flex flex-col sm:flex-row items-center sm:items-start justify-center gap-8 sm:gap-10">
+                    <div className="w-52 h-52 flex-shrink-0">
+                      <svg viewBox="0 0 100 100" className="w-full h-full" role="img" aria-label={t('allergenDistributionTitle')}>
+                        <g transform="rotate(-90 50 50)">
+                          {(() => {
+                            let cumulative = 0;
+                            return menuMixSegments.map((segment) => {
+                              const dash = segment.fraction * donutCirc;
+                              const offset = -cumulative * donutCirc;
+                              cumulative += segment.fraction;
+                              return (
+                                <circle
+                                  key={segment.name}
+                                  cx="50"
+                                  cy="50"
+                                  r={donutRadius}
+                                  fill="none"
+                                  stroke={segment.color}
+                                  strokeWidth="14"
+                                  strokeLinecap="butt"
+                                  strokeDasharray={`${dash} ${donutCirc}`}
+                                  strokeDashoffset={offset}
+                                />
+                              );
+                            });
+                          })()}
+                        </g>
+                        <circle cx="50" cy="50" r="26" className="fill-gray-50 dark:fill-gray-900" />
+                      </svg>
                     </div>
-                  ))}
-                </div>
-              </div>
-              {totalAllergenTags > 0 && (
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-6 text-center">
-                  Based on {totalAllergenTags} allergen tags across your current menu.
-                </p>
-              )}
+                    <ul className="w-full max-w-xs space-y-3 sm:pt-1">
+                      {menuMixSegments.map((segment) => (
+                        <li key={segment.name} className="flex items-center gap-3 text-sm">
+                          <span
+                            className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-black/5 dark:ring-white/10"
+                            style={{ backgroundColor: segment.color }}
+                          />
+                          <div className="flex-1 min-w-0 flex items-baseline justify-between gap-2">
+                            <span className="font-medium text-gray-800 dark:text-white truncate">{segment.name}</span>
+                            <span className="text-gray-600 dark:text-gray-400 tabular-nums flex-shrink-0">
+                              {segment.percentage}%{' '}
+                              <span className="text-gray-400 dark:text-gray-500 font-normal">({segment.count})</span>
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {totalAllergenTags > 0 && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-6 text-center sm:text-left">
+                    Based on {totalAllergenTags} allergen tag{totalAllergenTags === 1 ? '' : 's'} across your current menu.
+                  </p>
+                )}
+              </motion.div>
             </div>
               </>
             )}

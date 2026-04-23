@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { getEffectiveMenuCategories, sortCategoriesByOrder } from '../utils/menuCategories';
 
 interface PublicAllergen {
@@ -218,7 +217,6 @@ const PublicMenu: React.FC = () => {
   const [showWelcome, setShowWelcome] = useState(true);
   const [welcomeEntered, setWelcomeEntered] = useState(false);
   const itemViewsSentRef = useRef<Set<string>>(new Set());
-  const shouldReduceMotion = useReducedMotion();
   /** Allergen ids the guest wants to avoid — dishes containing any of these are hidden */
   const [excludedAllergenIds, setExcludedAllergenIds] = useState<string[]>([]);
   /** Dietary flags — when non-empty, only dishes matching all selected options are shown */
@@ -661,16 +659,11 @@ const PublicMenu: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <AnimatePresence>
         {showWelcome && !loading && !error && (
-        <motion.div
+        <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 transition-opacity duration-500 ease-out ${
             welcomeEntered ? 'opacity-100' : 'opacity-0'
           }`}
-          initial={shouldReduceMotion ? false : { opacity: 0 }}
-          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-          transition={{ duration: 0.28 }}
           role="dialog"
           aria-modal="true"
           aria-labelledby="welcome-menu-title"
@@ -679,14 +672,10 @@ const PublicMenu: React.FC = () => {
             className="absolute inset-0 bg-gradient-to-b from-emerald-950/75 via-gray-900/80 to-black/85 backdrop-blur-[2px]"
             aria-hidden
           />
-          <motion.div
+          <div
             className={`relative w-full max-w-md transform transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
               welcomeEntered ? 'translate-y-0 scale-100' : 'translate-y-6 scale-[0.98]'
             }`}
-            initial={shouldReduceMotion ? false : { y: 14, scale: 0.98, opacity: 0 }}
-            animate={shouldReduceMotion ? undefined : { y: 0, scale: 1, opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { y: 8, opacity: 0 }}
-            transition={{ duration: 0.3 }}
           >
             <div className="rounded-[1.75rem] bg-white shadow-[0_25px_60px_-15px_rgba(6,78,59,0.45)] ring-1 ring-emerald-900/10 overflow-hidden">
               <div className="relative overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 px-6 pt-8 pb-10 text-white">
@@ -740,27 +729,24 @@ const PublicMenu: React.FC = () => {
                     </li>
                   ))}
                 </ul>
-                <motion.button
+                <button
                   type="button"
                   onClick={() => setShowWelcome(false)}
                   className="mt-7 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3.5 text-[15px] font-semibold text-white shadow-lg shadow-emerald-700/25 transition hover:from-emerald-500 hover:to-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 active:scale-[0.99]"
-                  whileHover={shouldReduceMotion ? undefined : { y: -1 }}
-                  whileTap={shouldReduceMotion ? undefined : { scale: 0.99 }}
                 >
                   <span>Enter menu</span>
                   <svg className="h-5 w-5 opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                </motion.button>
+                </button>
                 <p className="mt-4 text-center text-[11px] text-gray-500">
                   Filters and your order can be changed anytime.
                 </p>
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-      </AnimatePresence>
 
       <header className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-6 flex items-start gap-4">
@@ -898,7 +884,7 @@ const PublicMenu: React.FC = () => {
                 {categoryNames.map((category) => {
                   const active = category === activeCategory;
                   return (
-                    <motion.button
+                    <button
                       key={category}
                       type="button"
                       onClick={() => setActiveCategory(category)}
@@ -907,11 +893,9 @@ const PublicMenu: React.FC = () => {
                           ? 'bg-emerald-600 text-white border-emerald-700'
                           : 'bg-white text-gray-700 border-gray-200 hover:border-emerald-300 hover:text-emerald-700'
                       }`}
-                      whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                      layout={!shouldReduceMotion}
                     >
                       {category}
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>
@@ -991,15 +975,10 @@ const PublicMenu: React.FC = () => {
                     const imageSrc = blobUrl || directImageUrl(item.image, getPublicOriginBaseUrl());
                     const showImg = !!imageSrc && !failedImages.has(item._id);
                     return (
-                      <motion.article
+                      <article
                         key={item._id}
                         onClick={() => openMenuItemDetail(item)}
                         className="group relative bg-white border border-gray-200 rounded-2xl overflow-hidden flex gap-0 shadow-sm hover:border-emerald-300 hover:shadow-md transition-all duration-200 cursor-pointer"
-                        initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-                        animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2 }}
-                        whileHover={shouldReduceMotion ? undefined : { y: -1 }}
-                        layout={!shouldReduceMotion}
                       >
                         {showImg ? (
                           <div className="w-24 h-24 sm:w-28 sm:h-28 flex-shrink-0 bg-gray-100">
@@ -1061,14 +1040,13 @@ const PublicMenu: React.FC = () => {
                           )}
                           {item.isAvailable && (
                             <div className="mt-3">
-                              <motion.button
+                              <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   addToCart(item);
                                 }}
                                 className="inline-flex items-center px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 transition"
-                                whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
                               >
                                 <span className="mr-1.5">Add to order</span>
                                 <svg
@@ -1084,7 +1062,7 @@ const PublicMenu: React.FC = () => {
                                     d="M12 4v16m8-8H4"
                                   />
                                 </svg>
-                              </motion.button>
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1093,7 +1071,7 @@ const PublicMenu: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </div>
-                      </motion.article>
+                      </article>
                     );
                   })}
                 </div>
@@ -1108,23 +1086,14 @@ const PublicMenu: React.FC = () => {
       </main>
 
       {/* Item detail modal */}
-      <AnimatePresence>
       {selectedItem && (
-        <motion.div
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           onClick={() => setSelectedItem(null)}
-          initial={shouldReduceMotion ? false : { opacity: 0 }}
-          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-          transition={{ duration: 0.2 }}
         >
-          <motion.div
+          <div
             className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
-            initial={shouldReduceMotion ? false : { y: 14, scale: 0.98, opacity: 0 }}
-            animate={shouldReduceMotion ? undefined : { y: 0, scale: 1, opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { y: 8, opacity: 0 }}
-            transition={{ duration: 0.22 }}
           >
             <div className="relative">
               {(() => {
@@ -1211,15 +1180,13 @@ const PublicMenu: React.FC = () => {
                 </div>
               )}
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-      </AnimatePresence>
 
       {/* Guest order status — polls until completed or cancelled */}
-      <AnimatePresence>
         {trackedOrder && (
-          <motion.div
+          <div
             className="fixed inset-x-0 z-[38] max-w-4xl mx-auto px-3 sm:px-4 pointer-events-none"
             style={{
               bottom:
@@ -1227,10 +1194,6 @@ const PublicMenu: React.FC = () => {
                   ? 'calc(5.75rem + env(safe-area-inset-bottom, 0px))'
                   : 'calc(1rem + env(safe-area-inset-bottom, 0px))'
             }}
-            initial={shouldReduceMotion ? false : { y: 16, opacity: 0 }}
-            animate={shouldReduceMotion ? undefined : { y: 0, opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { y: 16, opacity: 0 }}
-            transition={{ duration: 0.22 }}
           >
             <div className="pointer-events-auto rounded-2xl border border-emerald-200 bg-white shadow-lg overflow-hidden">
               <button
@@ -1319,30 +1282,20 @@ const PublicMenu: React.FC = () => {
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
 
       {/* Cart bar */}
-      <AnimatePresence>
       {cartCount > 0 && (
-        <motion.div
-          className="fixed inset-x-0 bottom-0 z-40"
-          initial={shouldReduceMotion ? false : { y: 24, opacity: 0 }}
-          animate={shouldReduceMotion ? undefined : { y: 0, opacity: 1 }}
-          exit={shouldReduceMotion ? undefined : { y: 24, opacity: 0 }}
-          transition={{ duration: 0.22 }}
-        >
+        <div className="fixed inset-x-0 bottom-0 z-40">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 pb-4">
-            <motion.button
+            <button
               type="button"
               onClick={() => {
                 setCheckoutError('');
                 setShowCartSheet(true);
               }}
               className="w-full rounded-2xl bg-white shadow-lg border border-emerald-100 px-4 py-3 flex items-center justify-between gap-3 text-left hover:border-emerald-200 transition"
-              whileHover={shouldReduceMotion ? undefined : { y: -1 }}
-              whileTap={shouldReduceMotion ? undefined : { scale: 0.995 }}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 text-sm font-semibold flex-shrink-0">
@@ -1359,30 +1312,20 @@ const PublicMenu: React.FC = () => {
                 </div>
               </div>
               <span className="text-sm font-semibold text-emerald-700 flex-shrink-0">View cart →</span>
-            </motion.button>
+            </button>
           </div>
-        </motion.div>
+        </div>
       )}
-      </AnimatePresence>
 
       {/* Cart sheet — review lines, change quantities, place order */}
-      <AnimatePresence>
       {showCartSheet && cartCount > 0 && (
-        <motion.div
+        <div
           className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:p-4 bg-black/50"
           onClick={() => setShowCartSheet(false)}
-          initial={shouldReduceMotion ? false : { opacity: 0 }}
-          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-          transition={{ duration: 0.2 }}
         >
-          <motion.div
+          <div
             className="bg-white rounded-t-3xl sm:rounded-2xl shadow-xl max-w-md w-full mx-auto max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
-            initial={shouldReduceMotion ? false : { y: 20, opacity: 0 }}
-            animate={shouldReduceMotion ? undefined : { y: 0, opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { y: 16, opacity: 0 }}
-            transition={{ duration: 0.22 }}
           >
             <div className="flex-shrink-0 p-4 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Your order</h2>
@@ -1524,29 +1467,19 @@ const PublicMenu: React.FC = () => {
                 Staff can confirm this by table number and order reference.
               </p>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-      </AnimatePresence>
 
       {/* Order summary / confirmation */}
-      <AnimatePresence>
       {showOrderSummary && (
-        <motion.div
+        <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           onClick={closeOrderSummary}
-          initial={shouldReduceMotion ? false : { opacity: 0 }}
-          animate={shouldReduceMotion ? undefined : { opacity: 1 }}
-          exit={shouldReduceMotion ? undefined : { opacity: 0 }}
-          transition={{ duration: 0.2 }}
         >
-          <motion.div
+          <div
             className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
-            initial={shouldReduceMotion ? false : { y: 14, scale: 0.98, opacity: 0 }}
-            animate={shouldReduceMotion ? undefined : { y: 0, scale: 1, opacity: 1 }}
-            exit={shouldReduceMotion ? undefined : { y: 8, opacity: 0 }}
-            transition={{ duration: 0.22 }}
           >
             <div className="p-5 border-b border-gray-100">
               <h2 className="text-lg font-semibold text-gray-900">Order placed</h2>
@@ -1631,10 +1564,9 @@ const PublicMenu: React.FC = () => {
                 Done
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-      </AnimatePresence>
     </div>
   );
 };

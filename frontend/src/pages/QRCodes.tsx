@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import QRCodeLib from 'qrcode';
 import { jsPDF } from 'jspdf';
@@ -99,6 +100,32 @@ function envDefaultApi(): string | null {
   return v?.trim().startsWith('http') ? v.trim().replace(/\/$/, '') : null;
 }
 
+type QrScanSummary = {
+  totalScans?: number;
+  uniqueVisitors?: number;
+  avgTimeSeconds?: number;
+  conversions?: number;
+  totalScansLast30?: number;
+};
+
+function normalizeScanRows(payload: unknown): { date: string; label: string; count: number }[] {
+  const raw =
+    payload && typeof payload === 'object' && payload !== null && 'data' in payload
+      ? (payload as { data: unknown }).data
+      : null;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row: unknown) => {
+      const r = row as { date?: string; label?: string; count?: number };
+      return {
+        date: typeof r?.date === 'string' ? r.date : '',
+        label: typeof r?.label === 'string' ? r.label : '',
+        count: Math.max(0, Number(r?.count) || 0)
+      };
+    })
+    .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date));
+}
+
 function initialPublicUrlPair(): { website: string; api: string } {
   const envW = envDefaultWebsite();
   const envA = envDefaultApi();
@@ -142,13 +169,7 @@ const QRCodes: React.FC = () => {
   const [includeLogo, setIncludeLogo] = useState(false);
   const [color, setColor] = useState('#000000');
   const [scanAnalytics, setScanAnalytics] = useState<{ date: string; label: string; count: number }[]>([]);
-  const [scanSummary, setScanSummary] = useState<{
-    totalScans?: number;
-    uniqueVisitors?: number;
-    avgTimeSeconds?: number;
-    conversions?: number;
-    totalScansLast30?: number;
-  }>({});
+  const [scanSummary, setScanSummary] = useState<QrScanSummary>({});
   const isFirstSizeColor = useRef(true);
 
   const initialUrls = initialPublicUrlPair();
@@ -180,17 +201,13 @@ const QRCodes: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const [week, month] = await Promise.all([
-          qrService.getScanAnalytics({ range: '7d' }),
-          qrService.getScanAnalytics({ range: '30d' })
-        ]);
-        setScanAnalytics(week?.data ?? []);
-        setScanSummary(month?.summary ?? {});
-      } catch {
-        setScanAnalytics([]);
-        setScanSummary({});
-      }
+      const [week, month] = await Promise.all([
+        qrService.getScanAnalytics({ range: '7d' }).catch(() => null),
+        qrService.getScanAnalytics({ range: '30d' }).catch(() => null)
+      ]);
+      setScanAnalytics(normalizeScanRows(week));
+      const m = month && typeof month === 'object' && month !== null ? (month as { summary?: QrScanSummary }).summary : undefined;
+      setScanSummary(m && typeof m === 'object' && !Array.isArray(m) ? m : {});
     };
     load();
   }, []);
@@ -329,6 +346,74 @@ const QRCodes: React.FC = () => {
     authService.logout();
   };
 
+  const shouldReduceMotion = useReducedMotion();
+
+  const dailyScanChart = useMemo(() => {
+    const rows = scanAnalytics;
+    const n = rows.length;
+    if (n === 0) return null;
+
+    const W = 960;
+    const H = 220;
+    const padL = 48;
+    const padR = 24;
+    const padT = 28;
+    const padB = 40;
+    const plotW = W - padL - padR;
+    const plotH = H - padT - padB;
+    const baseline = padT + plotH;
+    const maxCount = Math.max(1, ...rows.map((r) => r.count));
+
+    const pts = rows.map((r, i) => {
+      const x = n === 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW;
+      const y = baseline - (r.count / maxCount) * plotH;
+      return { x, y, label: r.label || r.date.slice(5), count: r.count };
+    });
+
+    const linePoints = pts.map((p) => `${p.x},${p.y}`).join(' ');
+    const yTicks = [0.25, 0.5, 0.75, 1].map((t) => ({
+      y: baseline - t * plotH,
+      val: Math.round(maxCount * t)
+    }));
+
+    return (
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Daily QR scan counts for the selected period">
+        <defs>
+          <linearGradient id="qrScanLineGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0.75" />
+          </linearGradient>
+        </defs>
+        <g className="text-gray-200 dark:text-gray-600" stroke="currentColor">
+          <line x1={padL} y1={padT} x2={padL} y2={baseline} />
+          <line x1={padL} y1={baseline} x2={padL + plotW} y2={baseline} />
+          {yTicks.map((tk) => (
+            <line key={tk.y} x1={padL} y1={tk.y} x2={padL + plotW} y2={tk.y} strokeDasharray="4 4" opacity={0.85} />
+          ))}
+        </g>
+        {yTicks.map((tk) => (
+          <text key={`tick-${tk.y}`} x={padL - 8} y={tk.y + 4} fontSize="11" textAnchor="end" fill="#9ca3af" className="dark:fill-gray-500">
+            {tk.val}
+          </text>
+        ))}
+        {n > 1 ? (
+          <polyline fill="none" stroke="url(#qrScanLineGradient)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" points={linePoints} />
+        ) : null}
+        {pts.map((p, i) => (
+          <g key={`${p.label}-${i}`}>
+            <title>{`${p.label}: ${p.count} scan${p.count === 1 ? '' : 's'}`}</title>
+            <circle cx={p.x} cy={p.y} r="5" fill="#10b981" className="dark:fill-emerald-400" />
+          </g>
+        ))}
+        {pts.map((p, i) => (
+          <text key={`lab-${p.label}-${i}`} x={p.x} y={H - 8} fontSize="11" textAnchor="middle" fill="#6b7280" className="dark:fill-gray-400">
+            {p.label}
+          </text>
+        ))}
+      </svg>
+    );
+  }, [scanAnalytics]);
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col qr-codes-page">
       <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
@@ -424,12 +509,22 @@ const QRCodes: React.FC = () => {
 
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
-            <div className="mb-6">
+            <motion.div
+              className="mb-6"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <h2 className="text-3xl font-bold text-gray-800 dark:text-white">QR Code Management</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Clean, ready-to-print QR for menu access</p>
-            </div>
+            </motion.div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <motion.div
+              className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
               <div className="xl:col-span-2 self-start bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">Your Restaurant QR Code</h3>
 
@@ -612,9 +707,14 @@ const QRCodes: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
+            <motion.div
+              className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.1 }}
+            >
               <h4 className="font-semibold text-gray-800 dark:text-white">Customize QR Code</h4>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Size and colour update the QR automatically after a moment, or tap Regenerate.
@@ -659,65 +759,26 @@ const QRCodes: React.FC = () => {
                   <span className="text-sm text-gray-500 dark:text-gray-400">{color}</span>
                 </div>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 no-print">
+            <motion.div
+              className="mt-6 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm p-6 no-print"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.14 }}
+            >
               <h4 className="font-semibold text-gray-800 dark:text-white">Daily Scans</h4>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">QR code scan activity over the last 7 days (from today)</p>
-              <div className="w-full h-56">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-4">QR code scan activity over the last 7 days (UTC days, ending today)</p>
+              <div className="w-full h-56 min-h-[14rem]">
                 {scanAnalytics.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
                     No scan data yet. Scans will appear when customers open the menu via the QR link.
                   </div>
                 ) : (
-                  <svg viewBox="0 0 960 220" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-                    <defs>
-                      <linearGradient id="scanLine" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10b981" stopOpacity="1" />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity="0.8" />
-                      </linearGradient>
-                    </defs>
-                    <g stroke="#e5e7eb" strokeWidth="1">
-                      <line x1="60" y1="20" x2="60" y2="190" />
-                      <line x1="60" y1="190" x2="920" y2="190" />
-                      {[0, 1, 2, 3, 4, 5, 6].map((i) => (
-                        <line key={i} x1={60 + (i + 1) * 120} y1="20" x2={60 + (i + 1) * 120} y2="190" />
-                      ))}
-                      <line x1="60" y1="150" x2="920" y2="150" />
-                      <line x1="60" y1="110" x2="920" y2="110" />
-                      <line x1="60" y1="70" x2="920" y2="70" />
-                      <line x1="60" y1="30" x2="920" y2="30" />
-                    </g>
-                    {(() => {
-                      const maxCount = Math.max(1, ...scanAnalytics.map((d) => d.count));
-                      const points = scanAnalytics.map((d, i) => {
-                        const x = 60 + (i + 1) * 120;
-                        const y = 190 - (d.count / maxCount) * 160;
-                        return `${x},${y}`;
-                      }).join(' ');
-                      const circles = scanAnalytics.map((d, i) => {
-                        const x = 60 + (i + 1) * 120;
-                        const y = 190 - (d.count / maxCount) * 160;
-                        return { x, y };
-                      });
-                      return (
-                        <>
-                          {points && <polyline fill="none" stroke="url(#scanLine)" strokeWidth="3" points={points} />}
-                          {circles.map((c, i) => (
-                            <circle key={i} cx={c.x} cy={c.y} r="4" fill="#10b981" />
-                          ))}
-                        </>
-                      );
-                    })()}
-                    {scanAnalytics.map((d, i) => (
-                      <text key={d.date} x={60 + (i + 1) * 120} y={210} fontSize="12" textAnchor="middle" fill="#6b7280" className="dark:fill-gray-400">
-                        {d.label}
-                      </text>
-                    ))}
-                  </svg>
+                  dailyScanChart
                 )}
               </div>
-            </div>
+            </motion.div>
           </div>
         </main>
       </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import Icon from '@mdi/react';
 import toast from 'react-hot-toast';
 import {
@@ -240,6 +241,7 @@ const Settings: React.FC = () => {
   }, []);
 
   const roleLabel = formatRoleLabel(userRole);
+  const shouldReduceMotion = useReducedMotion();
 
   const handleSaveAccount = async () => {
     if (!accountName.trim()) {
@@ -561,7 +563,12 @@ const Settings: React.FC = () => {
         <main className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-900">
           <div className="p-8">
             {/* Page header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <motion.div
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <div>
                 <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-white tracking-tight">Settings</h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -583,15 +590,25 @@ const Settings: React.FC = () => {
               ) : (
                 <span className="shrink-0 px-5 py-2.5 text-sm text-gray-500 dark:text-gray-400">Preview unavailable</span>
               )}
-            </div>
+            </motion.div>
 
             {/* Status cards — full width, balanced */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <motion.div
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
               <StatCard label="Profile Status" value="Complete" accent="green" icon={mdiCheckCircle} />
               <StatCard label="Notifications" value={notificationPrefs.email ? 'Enabled' : 'Disabled'} accent="blue" icon={mdiBellOutline} />
               <StatCard label="Restaurant Status" value="Operational" accent="emerald" icon={mdiStoreOutline} />
-            </div>
+            </motion.div>
 
+            <motion.div
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.1 }}
+            >
             {/* Section: Account + Restaurant side by side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <SectionCard
@@ -837,6 +854,7 @@ const Settings: React.FC = () => {
               <span className="text-gray-400 dark:text-gray-500">·</span>
               <span className="text-green-600 dark:text-green-400 font-medium">System Operational</span>
             </section>
+            </motion.div>
           </div>
         </main>
       </div>

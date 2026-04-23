@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { motion, useReducedMotion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
 import { staffService, type RestaurantTeamRole } from '../services/staffService';
@@ -345,6 +346,8 @@ const Staff: React.FC = () => {
     authService.logout();
   };
 
+  const shouldReduceMotion = useReducedMotion();
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Toast Notifications */}
@@ -517,7 +520,12 @@ const Staff: React.FC = () => {
             ) : (
               <>
             {/* Page Title and Action Button */}
-            <div className="flex items-center justify-between mb-8">
+            <motion.div
+              className="flex items-center justify-between mb-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26 }}
+            >
               <div>
                 <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">Staff Management</h2>
                 <p className="text-gray-600 dark:text-gray-400">Manage your restaurant team members</p>
@@ -533,9 +541,14 @@ const Staff: React.FC = () => {
                   <span>Invite New Staff</span>
                 </button>
               )}
-            </div>
+            </motion.div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <motion.div
+              className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
+              animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
+              transition={{ duration: 0.26, delay: 0.06 }}
+            >
               {/* Left Column - Team Members Table */}
               <div className="lg:col-span-2">
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
@@ -816,7 +829,7 @@ const Staff: React.FC = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
             </> )}
           </div>
         </main>

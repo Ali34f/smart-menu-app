@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { jsPDF } from 'jspdf';
+import toast from 'react-hot-toast';
 import { menuService } from '../services/menuService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import AppHeaderBranding from '../components/AppHeaderBranding';
@@ -54,6 +56,110 @@ const AllergenComplianceReport: React.FC = () => {
     window.print();
   };
 
+  const handleSavePdf = () => {
+    if (loading) return;
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 14;
+      const lineH = 5;
+      const bottomSafe = 16;
+      let y = margin;
+
+      const newPage = () => {
+        doc.addPage();
+        y = margin;
+      };
+
+      const fitBlock = (heightMm: number) => {
+        if (y + heightMm > pageH - bottomSafe) newPage();
+      };
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Allergen Compliance Report', margin, y);
+      y += lineH + 4;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(70, 70, 70);
+      doc.text('UK Food Information Regulations 2014', margin, y);
+      y += lineH + 1;
+      doc.text(
+        `${restaurantName} · Generated ${new Date().toLocaleDateString(undefined, { dateStyle: 'long' })}`,
+        margin,
+        y
+      );
+      y += lineH + 6;
+      doc.setTextColor(0, 0, 0);
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary', margin, y);
+      y += lineH + 2;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`Total dishes: ${totalDishes}`, margin, y);
+      y += lineH + 1;
+      doc.text(`Fully tagged: ${fullyTagged}`, margin, y);
+      y += lineH + 1;
+      doc.text(`Need attention: ${needAttention}`, margin, y);
+      y += lineH + 5;
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Dishes and allergen status', margin, y);
+      y += lineH + 3;
+      doc.setFont('helvetica', 'normal');
+
+      const textW = pageW - 2 * margin;
+      if (menuItems.length === 0) {
+        fitBlock(lineH * 2);
+        doc.text('No menu items yet.', margin, y);
+        y += lineH * 2;
+      } else {
+        for (const item of menuItems) {
+          const status = getStatus(item);
+          const names = getAllergenNames(item).join(', ') || '—';
+          const dishLines = doc.splitTextToSize(item.name, textW);
+          const detailLines = doc.splitTextToSize(`Status: ${status} · Allergens: ${names}`, textW);
+          const blockH = dishLines.length * lineH + 2 + detailLines.length * lineH + 4;
+          fitBlock(blockH);
+
+          doc.setFont('helvetica', 'bold');
+          for (const line of dishLines) {
+            doc.text(line, margin, y);
+            y += lineH;
+          }
+          doc.setFont('helvetica', 'normal');
+          for (const line of detailLines) {
+            doc.text(line, margin, y);
+            y += lineH;
+          }
+          y += 3;
+        }
+      }
+
+      const disclaimer =
+        'Use this report for your records or to demonstrate allergen information practices. Keep menu allergen data up to date for customer safety and regulatory compliance.';
+      const footLines = doc.splitTextToSize(disclaimer, textW);
+      fitBlock(footLines.length * lineH + 4);
+      doc.setFontSize(8);
+      doc.setTextColor(90, 90, 90);
+      for (const line of footLines) {
+        doc.text(line, margin, y);
+        y += lineH - 0.5;
+      }
+
+      const safeName = restaurantName.replace(/[^\w-]+/g, '-').slice(0, 48) || 'restaurant';
+      const dateSlug = new Date().toISOString().slice(0, 10);
+      doc.save(`allergen-compliance-${safeName}-${dateSlug}.pdf`);
+      toast.success('Report downloaded');
+    } catch (e) {
+      console.error(e);
+      toast.error('Could not create the PDF. Try again or use Print.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-10 no-print">
@@ -62,10 +168,22 @@ const AllergenComplianceReport: React.FC = () => {
           <WorkspaceContextBar restaurantName={restaurantName} />
           <div className="flex items-center gap-3">
             <button
+              type="button"
+              onClick={handleSavePdf}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition shadow-sm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 12v9m0-9l4 4m-4-4L8 16" />
+              </svg>
+              Save PDF
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="flex items-center gap-2 px-4 py-2.5 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 text-gray-800 dark:text-white rounded-lg font-medium transition"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Print report

@@ -46,6 +46,15 @@ export const translations: Record<string, Record<string, string>> = {
     'viewReports': 'View Reports',
     'manageStaff': 'Manage Staff',
     'mostFilteredAllergens': 'Most Filtered Allergens',
+    'mostFilteredAllergensHelp':
+      'When guests exclude allergens on your public menu, each allergen is counted here (all time).',
+    'allergenDistributionTitle': 'Allergen mix (your menu)',
+    'allergenDistributionHelp':
+      'How tagged allergens on your dishes group into gluten, dairy, nuts, and other categories.',
+    'noAllergenFilterUsageYet':
+      'No guest filter data yet. When visitors use the allergen filter on your public menu, counts appear here.',
+    'noTaggedAllergensOnMenu':
+      'No allergens tagged on menu items yet. Tag allergens on dishes to see this breakdown.',
     'todaysOverview': "Today's Overview",
     'total': 'Total',
     'queries': 'Queries',
