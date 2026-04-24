@@ -7,15 +7,10 @@ const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'sup
 
 const normalizeRole = (role) => String(role || '').toLowerCase().trim();
 
-/** Roles that may edit menu items in normal restaurant operations */
 const MENU_EDITOR_ROLES = new Set(['owner', 'manager', 'staff', 'platform_admin', 'super_owner']);
-
-/** Roles that may edit ingredients */
 const INGREDIENT_EDITOR_ROLES = MENU_EDITOR_ROLES;
 
-/**
- * Prefer this over checkPermission('canEditMenu') for menu updates — DB permission flags can be missing/legacy.
- */
+// Role-first: some users never got granular flags; canEditMenu on the document is the fallback.
 exports.requireCanEditMenu = (req, res, next) => {
   const role = normalizeRole(req.user?.role);
   if (MENU_EDITOR_ROLES.has(role)) {
@@ -44,20 +39,16 @@ exports.requireCanEditIngredients = (req, res, next) => {
   });
 };
 
-// Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {
   let token;
 
-  // Check if authorization header exists and starts with Bearer
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
-    // Extract token from "Bearer <token>"
     token = req.headers.authorization.split(' ')[1];
   }
 
-  // Make sure token exists
   if (!token) {
     return res.status(401).json({
       success: false,
@@ -66,13 +57,10 @@ exports.protect = async (req, res, next) => {
   }
 
   try {
-    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Find user by ID from token
     req.user = await User.findById(decoded.id).select('-password');
 
-    // Check if user exists and is active
     if (!req.user || !req.user.isActive) {
       return res.status(401).json({
         success: false,
@@ -82,9 +70,7 @@ exports.protect = async (req, res, next) => {
 
     req.user.permissions = getEffectivePermissions(req.user);
 
-    // Resolve active restaurant context.
-    // - Regular users: always bound to their own restaurantId.
-    // - super_owner: can pick via x-restaurant-id among managed restaurants.
+    // Tenant context: staff are fixed to restaurantId; platform roles may override with x-restaurant-id.
     if (isPlatformAdminRole(req.user.role)) {
       const requestedRestaurantId = (req.headers['x-restaurant-id'] || '').toString().trim();
       const managedIds = (req.user.managedRestaurantIds || []).map((id) => id.toString());
@@ -103,7 +89,6 @@ exports.protect = async (req, res, next) => {
         });
       }
 
-      // Platform admins can work in any restaurant that exists (new signups appear immediately)
       const restaurantExists = await Restaurant.findById(activeRestaurantId).select('_id').lean();
       if (!restaurantExists) {
         return res.status(400).json({
@@ -126,7 +111,6 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-// Grant access to specific roles
 exports.authorize = (...roles) => {
   return (req, res, next) => {
     if (!roles.includes(req.user.role)) {
@@ -139,7 +123,6 @@ exports.authorize = (...roles) => {
   };
 };
 
-// Check specific permissions
 exports.checkPermission = (permission) => {
   return (req, res, next) => {
     if (!req.user.permissions || !req.user.permissions[permission]) {

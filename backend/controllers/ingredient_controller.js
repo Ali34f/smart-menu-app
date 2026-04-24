@@ -1,16 +1,13 @@
 const Ingredient = require('../models/Ingredient');
 const MenuItem = require('../models/MenuItem');
 
-// @desc    Get all ingredients for restaurant
-// @route   GET /api/ingredients
-// @access  Private
 exports.getIngredients = async (req, res, next) => {
   try {
     const ingredients = await Ingredient.find({ restaurantId: req.restaurantId })
       .populate('allergens', 'name icon')
       .sort('name');
 
-    // Get menu items to count ingredient usage
+    // dishCount: one scan of menu ingredient lists instead of N separate counts.
     const menuItems = await MenuItem.find({ restaurantId: req.restaurantId }).select('ingredients');
     const ingredientUsage = {};
     menuItems.forEach((mi) => {
@@ -36,9 +33,6 @@ exports.getIngredients = async (req, res, next) => {
   }
 };
 
-// @desc    Get single ingredient
-// @route   GET /api/ingredients/:id
-// @access  Private
 exports.getIngredient = async (req, res, next) => {
   try {
     const ingredient = await Ingredient.findOne({
@@ -70,9 +64,6 @@ exports.getIngredient = async (req, res, next) => {
   }
 };
 
-// @desc    Create new ingredient
-// @route   POST /api/ingredients
-// @access  Private
 exports.createIngredient = async (req, res, next) => {
   try {
     req.body.restaurantId = req.restaurantId;
@@ -90,9 +81,6 @@ exports.createIngredient = async (req, res, next) => {
   }
 };
 
-// @desc    Update ingredient
-// @route   PUT /api/ingredients/:id
-// @access  Private
 exports.updateIngredient = async (req, res, next) => {
   try {
     let ingredient = await Ingredient.findOne({
@@ -126,9 +114,6 @@ exports.updateIngredient = async (req, res, next) => {
   }
 };
 
-// @desc    Delete ingredient
-// @route   DELETE /api/ingredients/:id
-// @access  Private
 exports.deleteIngredient = async (req, res, next) => {
   try {
     const ingredient = await Ingredient.findOne({

@@ -33,7 +33,6 @@ const ingredientSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create compound index to prevent duplicate ingredients per restaurant
 ingredientSchema.index({ restaurantId: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ingredient', ingredientSchema);

@@ -13,6 +13,7 @@ const {
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
+// One row per weekday; anything that is not HH:MM falls back to 12:00–21:00.
 const normalizeBusinessHours = (input = {}) => {
   const normalized = {};
   for (const day of DAY_KEYS) {
@@ -28,9 +29,6 @@ const normalizeBusinessHours = (input = {}) => {
   return normalized;
 };
 
-// @desc    Get current user's restaurant
-// @route   GET /api/restaurant
-// @access  Private
 exports.getRestaurant = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.restaurantId).select(
@@ -53,9 +51,6 @@ exports.getRestaurant = async (req, res, next) => {
   }
 };
 
-// @desc    Update current user's restaurant
-// @route   PUT /api/restaurant
-// @access  Private
 exports.updateRestaurant = async (req, res, next) => {
   try {
     const { name, email, phone, cuisineType, welcomeMessage, businessHours, menuCategories } = req.body;
@@ -78,6 +73,7 @@ exports.updateRestaurant = async (req, res, next) => {
 
     if (menuCategories !== undefined) {
       const role = String(req.user?.role || '').toLowerCase();
+      // Staff can edit service details; category taxonomy is owner/manager (and platform).
       if (!['owner', 'manager', 'platform_admin', 'super_owner'].includes(role)) {
         return res.status(403).json({
           success: false,
@@ -108,11 +104,9 @@ exports.updateRestaurant = async (req, res, next) => {
   }
 };
 
-// @desc    Delete all operational restaurant data (menu, ingredients, notifications, activity, public orders)
-// @route   POST /api/restaurant/danger/delete-data
-// @access  Private (owner/manager/platform_admin/super_owner)
 exports.deleteAllRestaurantData = async (req, res, next) => {
   try {
+    // Menu, ingredients, audit trails, guest orders — not the Restaurant doc or user accounts.
     const [menuResult, ingredientResult, activityResult, notificationResult, orderResult] = await Promise.all([
       MenuItem.deleteMany({ restaurantId: req.restaurantId }),
       Ingredient.deleteMany({ restaurantId: req.restaurantId }),
@@ -121,6 +115,7 @@ exports.deleteAllRestaurantData = async (req, res, next) => {
       PublicOrder.deleteMany({ restaurantId: req.restaurantId })
     ]);
 
+    // Nuke rollup fields tied to the deleted rows so analytics do not show stale totals.
     await Restaurant.findByIdAndUpdate(req.restaurantId, {
       $set: {
         dailyScans: {},
@@ -144,9 +139,6 @@ exports.deleteAllRestaurantData = async (req, res, next) => {
   }
 };
 
-// @desc    Deactivate current account and restaurant workspace
-// @route   POST /api/restaurant/danger/deactivate
-// @access  Private (owner/manager/platform_admin/super_owner)
 exports.deactivateRestaurantAccount = async (req, res, next) => {
   try {
     await Promise.all([

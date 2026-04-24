@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const userSchema = new mongoose.Schema({
+  // Platform roles are cross-tenant; other roles must belong to a restaurant.
   restaurantId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Restaurant',
@@ -37,7 +38,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Please add a password'],
     minlength: [6, 'Password must be at least 6 characters'],
-    select: false // Don't return password by default
+    select: false
   },
   role: {
     type: String,
@@ -80,7 +81,7 @@ const userSchema = new mongoose.Schema({
   },
   invitationAccepted: {
     type: Boolean,
-    default: true // Owners and directly registered users have it true by default
+    default: true
   },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
@@ -104,7 +105,7 @@ const userSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Encrypt password before saving
+// Only touch bcrypt when the password field changed (other presaves run on every save).
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
     return next();
@@ -115,12 +116,10 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-// Method to compare entered password with hashed password
 userSchema.methods.comparePassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Generate JWT token
 userSchema.methods.getSignedJwtToken = function() {
   return jwt.sign(
     { 
@@ -135,7 +134,7 @@ userSchema.methods.getSignedJwtToken = function() {
   );
 };
 
-// Set default permissions based on role
+// Permission flags always follow the role on save (staff invites still set invitationAccepted in code).
 userSchema.pre('save', function(next) {
   if (this.role === 'owner') {
     this.permissions = {
@@ -145,7 +144,6 @@ userSchema.pre('save', function(next) {
       canViewReports: true,
       canManageStaff: true
     };
-    // Owners always have invitation accepted
     this.invitationAccepted = true;
   } else if (this.role === 'manager') {
     this.permissions = {

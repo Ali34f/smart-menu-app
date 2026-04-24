@@ -22,13 +22,9 @@ const signShortToken = (payload) =>
     .update(JSON.stringify(payload))
     .digest('hex');
 
-// @desc    Register restaurant and owner account
-// @route   POST /api/auth/register
-// @access  Public
 exports.register = async (req, res, next) => {
   try {
     const {
-      // Restaurant details
       restaurantName,
       restaurantEmail,
       restaurantPhone,
@@ -36,7 +32,6 @@ exports.register = async (req, res, next) => {
       street,
       city,
       postcode,
-      // Owner details
       ownerName,
       ownerEmail,
       ownerPassword
@@ -69,7 +64,6 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Check if restaurant email already exists
     const restaurantExists = await Restaurant.findOne({ email: normalizedRestaurantEmail });
     if (restaurantExists) {
       return res.status(400).json({
@@ -78,7 +72,6 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Check if owner email already exists
     const userExists = await User.findOne({ email: normalizedOwnerEmail });
     if (userExists) {
       return res.status(400).json({
@@ -87,7 +80,6 @@ exports.register = async (req, res, next) => {
       });
     }
 
-    // Create restaurant
     const restaurant = await Restaurant.create({
       name: restaurantName,
       email: normalizedRestaurantEmail,
@@ -101,28 +93,26 @@ exports.register = async (req, res, next) => {
       }
     });
 
-    // Store default public menu link used across staff/public flows.
+    // Default deep link until someone regenerates QR with their real frontend base.
     const qrCodeUrl = `https://smartmenu.app/menu/${restaurant._id}`;
     restaurant.qrCode = qrCodeUrl;
     await restaurant.save();
 
-    // New restaurants appear immediately for platform admins (managed workspaces)
+    // Every platform role can open the new venue without maintaining a manual list.
     await User.updateMany(
       { role: { $in: ['platform_admin', 'super_owner'] } },
       { $addToSet: { managedRestaurantIds: restaurant._id } }
     );
 
-    // Create owner user account
     const user = await User.create({
       restaurantId: restaurant._id,
       name: ownerName,
       email: normalizedOwnerEmail,
       password: ownerPassword,
       role: 'owner',
-      invitationAccepted: true // Owners don't need to accept invitations
+      invitationAccepted: true
     });
 
-    // Generate JWT token
     const token = user.getSignedJwtToken();
 
     res.status(201).json({
@@ -145,14 +135,11 @@ exports.register = async (req, res, next) => {
   }
 };
 
-// @desc    Login user
-// @route   POST /api/auth/login
-// @access  Public
 exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    // Validate email & password and block object-based injections
+    // Require real strings so Mongo query operators cannot be passed through JSON bodies.
     if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
       return res.status(400).json({
         success: false,
@@ -167,9 +154,8 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check for user (include password field)
     let userQuery = User.findOne({ email: normalizedEmail }).select('+password');
-    // Guarded populate keeps tests stable when mocked queries only implement part of mongoose chain.
+    // Unit tests stub findOne without a full populate chain — call it only if present.
     if (typeof userQuery.populate === 'function') {
       userQuery = userQuery.populate('restaurantId', 'name qrCode');
       if (typeof userQuery.populate === 'function') {
@@ -185,7 +171,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Check if password matches
     const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
@@ -195,7 +180,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Deactivated users can reactivate with valid credentials
     if (!user.isActive) {
       return res.status(401).json({
         success: false,
@@ -204,7 +188,6 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // 2FA challenge flow
     if (user.twoFactorEnabled) {
       const ts = Date.now();
       const challengeToken = Buffer.from(
@@ -228,11 +211,9 @@ exports.login = async (req, res, next) => {
       });
     }
 
-    // Update last login
     user.lastLogin = Date.now();
     await user.save();
 
-    // Generate JWT token
     const token = user.getSignedJwtToken();
 
     const managedRestaurants = (user.managedRestaurantIds || []).map((r) => ({
@@ -266,9 +247,6 @@ exports.login = async (req, res, next) => {
   }
 };
 
-// @desc    Get current logged in user
-// @route   GET /api/auth/me
-// @access  Private
 exports.getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
@@ -296,9 +274,6 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
-// @desc    Logout user / clear cookie
-// @route   POST /api/auth/logout
-// @access  Private
 exports.logout = async (req, res, next) => {
   res.status(200).json({
     success: true,
@@ -306,9 +281,6 @@ exports.logout = async (req, res, next) => {
   });
 };
 
-// @desc    Update user profile
-// @route   PUT /api/auth/profile
-// @access  Private
 exports.updateProfile = async (req, res, next) => {
   try {
     const { name, currentPassword, newPassword } = req.body;
@@ -322,12 +294,10 @@ exports.updateProfile = async (req, res, next) => {
       });
     }
 
-    // Update name if provided
     if (name) {
       user.name = name;
     }
 
-    // Update password if provided
     if (newPassword) {
       if (!currentPassword) {
         return res.status(400).json({
@@ -336,7 +306,6 @@ exports.updateProfile = async (req, res, next) => {
         });
       }
 
-      // Verify current password
       const isMatch = await user.comparePassword(currentPassword);
       if (!isMatch) {
         return res.status(401).json({
@@ -345,7 +314,6 @@ exports.updateProfile = async (req, res, next) => {
         });
       }
 
-      // Set new password
       user.password = newPassword;
     }
 
@@ -366,9 +334,6 @@ exports.updateProfile = async (req, res, next) => {
   }
 };
 
-// @desc    Get restaurants current user can access
-// @route   GET /api/auth/my-restaurants
-// @access  Private
 exports.getMyRestaurants = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id)
@@ -384,7 +349,7 @@ exports.getMyRestaurants = async (req, res, next) => {
 
     let restaurants = [];
     if (isPlatformAdminRole(user.role)) {
-      // All restaurants in the system — stays in sync when new venues register (no stale managed list)
+      // Full directory for platform roles; new signups show up without touching managedRestaurantIds.
       const allRestaurants = await Restaurant.find({})
         .select('name qrCode isActive')
         .sort({ name: 1 })
@@ -414,9 +379,6 @@ exports.getMyRestaurants = async (req, res, next) => {
   }
 };
 
-// @desc    Validate and switch active restaurant context for current session
-// @route   POST /api/auth/switch-restaurant
-// @access  Private
 exports.switchRestaurant = async (req, res, next) => {
   try {
     const { restaurantId } = req.body;
@@ -462,7 +424,7 @@ exports.switchRestaurant = async (req, res, next) => {
       });
     }
 
-    // Keep currently selected context on user record for convenience.
+    // Remember the pick so protect() and /me line up on the next request.
     if (!user.restaurantId || user.restaurantId.toString() !== target._id.toString()) {
       user.restaurantId = target._id;
       await user.save();
@@ -481,9 +443,6 @@ exports.switchRestaurant = async (req, res, next) => {
   }
 };
 
-// @desc    Reactivate account using valid credentials
-// @route   POST /api/auth/reactivate
-// @access  Public
 exports.reactivate = async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
@@ -507,9 +466,6 @@ exports.reactivate = async (req, res, next) => {
   }
 };
 
-// @desc    Request a password reset token
-// @route   POST /api/auth/forgot-password
-// @access  Public
 exports.forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body || {};
@@ -518,7 +474,7 @@ exports.forgotPassword = async (req, res, next) => {
     }
     const normalizedEmail = email.trim().toLowerCase();
     const user = await User.findOne({ email: normalizedEmail });
-    // Do not leak user existence
+    // Same outcome whether the email exists — don't help attackers enumerate accounts.
     if (!user) {
       return res.status(200).json({ success: true, message: 'If this account exists, a reset link has been prepared.' });
     }
@@ -540,9 +496,6 @@ exports.forgotPassword = async (req, res, next) => {
   }
 };
 
-// @desc    Reset password by token
-// @route   POST /api/auth/reset-password
-// @access  Public
 exports.resetPassword = async (req, res, next) => {
   try {
     const { token, password } = req.body || {};
@@ -570,9 +523,6 @@ exports.resetPassword = async (req, res, next) => {
   }
 };
 
-// @desc    Start 2FA setup (returns QR + secret)
-// @route   POST /api/auth/2fa/setup
-// @access  Private
 exports.setupTwoFactor = async (req, res, next) => {
   try {
     const user = await User.findById(req.user.id).select('+twoFactorSecret +twoFactorTempSecret');
@@ -596,9 +546,6 @@ exports.setupTwoFactor = async (req, res, next) => {
   }
 };
 
-// @desc    Enable 2FA after verifying code
-// @route   POST /api/auth/2fa/enable
-// @access  Private
 exports.enableTwoFactor = async (req, res, next) => {
   try {
     const { code } = req.body || {};
@@ -626,9 +573,6 @@ exports.enableTwoFactor = async (req, res, next) => {
   }
 };
 
-// @desc    Disable 2FA
-// @route   POST /api/auth/2fa/disable
-// @access  Private
 exports.disableTwoFactor = async (req, res, next) => {
   try {
     const { code } = req.body || {};
@@ -656,9 +600,6 @@ exports.disableTwoFactor = async (req, res, next) => {
   }
 };
 
-// @desc    Complete login with 2FA challenge token + code
-// @route   POST /api/auth/verify-2fa-login
-// @access  Public
 exports.verifyTwoFactorLogin = async (req, res, next) => {
   try {
     const { challengeToken, code } = req.body || {};
@@ -680,7 +621,7 @@ exports.verifyTwoFactorLogin = async (req, res, next) => {
     if (expected !== sig) return res.status(400).json({ success: false, message: 'Invalid challenge token' });
 
     let userQuery = User.findById(uid).select('+twoFactorSecret');
-    // Guarded populate keeps tests stable when mocked queries only implement part of mongoose chain.
+    // Same pattern as login — tests often stub findById without .populate.
     if (typeof userQuery.populate === 'function') {
       userQuery = userQuery.populate('restaurantId', 'name qrCode');
       if (typeof userQuery.populate === 'function') {

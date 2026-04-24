@@ -10,14 +10,6 @@ const errorHandler = require('./middleware/error');
 // Load env vars
 dotenv.config();
 
-if (process.env.NODE_ENV !== 'test') {
-  const jwtSecret = process.env.JWT_SECRET;
-  if (!jwtSecret || !jwtSecret.trim()) {
-    console.error('JWT_SECRET is missing. Set it in backend/.env before starting the API.');
-    process.exit(1);
-  }
-}
-
 // Connect to database (skip in test - use mocks)
 if (process.env.NODE_ENV !== 'test') {
   connectDB();

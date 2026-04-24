@@ -42,6 +42,7 @@ const notificationSchema = new mongoose.Schema(
     }
   },
   {
+    // Notifications are append-only; "read" is a flag, not an edit timestamp.
     timestamps: { createdAt: true, updatedAt: false }
   }
 );

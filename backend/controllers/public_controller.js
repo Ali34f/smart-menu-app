@@ -8,7 +8,7 @@ const PublicOrder = require('../models/PublicOrder');
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-/** Safe dynamic segment for MongoDB keys (no . or $). */
+// Labels used as dynamic $inc path segments — Mongo rejects '.' and '$' in keys.
 const safeMongoKey = (s) =>
   String(s || '')
     .trim()
@@ -16,14 +16,10 @@ const safeMongoKey = (s) =>
     .replace(/\$/g, '＄')
     .slice(0, 120) || 'unknown';
 
-// @desc    Get public menu by restaurant ID (for QR code scan)
-// @route   GET /api/public/menu/:restaurantId
-// @access  Public (no authentication)
 exports.getPublicMenu = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
 
-    // Get restaurant info
     const restaurant = await Restaurant.findById(restaurantId).select(
       'name cuisineType address tableCount logo welcomeMessage businessHours menuCategories'
     );
@@ -35,7 +31,7 @@ exports.getPublicMenu = async (req, res, next) => {
       });
     }
 
-    // Get menu items (only active ones); .lean() for plain objects with all fields including image
+    // lean() so we can rewrite image strings in place for the client.
     let menuItems = await MenuItem.find({
       restaurantId,
       isAvailable: true
@@ -44,9 +40,7 @@ exports.getPublicMenu = async (req, res, next) => {
     .sort({ category: 1, name: 1 })
     .lean();
 
-    // Normalize image:
-    // - keep external URLs as-is
-    // - normalize local upload URLs/paths to "/uploads/..."
+    // Same-origin uploads: keep path only. True externals: leave full URL.
     menuItems = menuItems.map((doc) => {
       if (doc.image && typeof doc.image === 'string') {
         try {
@@ -54,22 +48,18 @@ exports.getPublicMenu = async (req, res, next) => {
             const parsed = new URL(doc.image);
             const pathname = parsed.pathname || '';
             if (pathname.startsWith('/uploads/')) {
-              doc.image = pathname; // local upload hosted by API
+              doc.image = pathname;
             }
-            // external CDN/hosted images stay unchanged
           } else if (!doc.image.startsWith('/')) {
             doc.image = doc.image.startsWith('uploads/')
               ? `/${doc.image}`
               : doc.image;
           }
-        } catch (_) {
-          // If URL parsing fails, leave existing value unchanged
-        }
+        } catch (_) {}
       }
       return doc;
     });
 
-    // Record a scan for today (for analytics) — atomic increment
     const today = todayKey();
     await Restaurant.updateOne(
       { _id: restaurantId },
@@ -91,13 +81,10 @@ exports.getPublicMenu = async (req, res, next) => {
   }
 };
 
-// @desc    Get filtered menu by allergens
-// @route   POST /api/public/menu/:restaurantId/filter
-// @access  Public
 exports.filterMenuByAllergens = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
-    const { allergenIds } = req.body; // Array of allergen ObjectIds to avoid (exclude any dish containing one)
+    const { allergenIds } = req.body;
 
     if (!allergenIds || !Array.isArray(allergenIds)) {
       return res.status(400).json({
@@ -106,13 +93,13 @@ exports.filterMenuByAllergens = async (req, res, next) => {
       });
     }
 
-    // Only valid ObjectIds — invalid strings cause Mongoose cast errors ($in on ObjectId refs).
+    // Only castable ids — $in on ObjectId refs throws on random strings.
     const exclude = allergenIds
       .filter(Boolean)
       .map((id) => String(id).trim())
       .filter((id) => mongoose.Types.ObjectId.isValid(id));
     const baseQuery = { restaurantId, isAvailable: true };
-    // $nin on an array field does not mean "no element in this list"; use $nor + $in
+    // Safe dishes: allergen array must not hit anything in exclude ($nin on the field would not mean that).
     const query =
       exclude.length > 0
         ? { ...baseQuery, $nor: [{ allergens: { $in: exclude } }] }
@@ -156,9 +143,6 @@ exports.filterMenuByAllergens = async (req, res, next) => {
   }
 };
 
-// @desc    Track allergen filter usage from public menu
-// @route   POST /api/public/menu/:restaurantId/filter-event
-// @access  Public
 exports.trackAllergenFilterEvent = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
@@ -229,9 +213,6 @@ exports.trackAllergenFilterEvent = async (req, res, next) => {
   }
 };
 
-// @desc    First visit of day (unique visitor approximation)
-// @route   POST /api/public/menu/:restaurantId/visit
-// @access  Public
 exports.trackPublicVisit = async (req, res) => {
   try {
     const { restaurantId } = req.params;
@@ -258,9 +239,6 @@ exports.trackPublicVisit = async (req, res) => {
   }
 };
 
-// @desc    Session duration when guest leaves (seconds)
-// @route   POST /api/public/menu/:restaurantId/session-duration
-// @access  Public
 exports.trackSessionDuration = async (req, res) => {
   try {
     const { restaurantId } = req.params;
@@ -293,9 +271,6 @@ exports.trackSessionDuration = async (req, res) => {
   }
 };
 
-// @desc    Menu item detail opened (view)
-// @route   POST /api/public/menu/:restaurantId/item-view
-// @access  Public
 exports.trackMenuItemView = async (req, res) => {
   try {
     const { restaurantId } = req.params;
@@ -327,22 +302,20 @@ exports.trackMenuItemView = async (req, res) => {
   }
 };
 
-// @desc    Serve an uploaded image (for public menu; use so requests can send ngrok header)
-// @route   GET /api/public/serve-image
-// @access  Public
 exports.serveImage = (req, res, next) => {
   try {
     let requestedPath = req.query.path || req.query.p;
     if (!requestedPath || typeof requestedPath !== 'string') {
       return res.status(400).json({ success: false, message: 'Missing path' });
     }
-    requestedPath = requestedPath.replace(/^\/+/, ''); // strip leading slashes
+    requestedPath = requestedPath.replace(/^\/+/, '');
     if (!requestedPath.startsWith('uploads/') && requestedPath !== 'uploads') {
       return res.status(400).json({ success: false, message: 'Invalid path' });
     }
     const uploadsDir = path.join(__dirname, '..', 'uploads');
     const filePath = path.join(__dirname, '..', requestedPath);
     const resolved = path.normalize(filePath);
+    // Reject path traversal (path must stay under uploads/).
     if (!resolved.startsWith(path.normalize(uploadsDir))) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
@@ -355,9 +328,6 @@ exports.serveImage = (req, res, next) => {
   }
 };
 
-// @desc    Get all allergens (for filter UI)
-// @route   GET /api/public/allergens
-// @access  Public
 exports.getAllergens = async (req, res, next) => {
   try {
     const allergens = await Allergen.find().sort({ name: 1 });
@@ -376,9 +346,6 @@ exports.getAllergens = async (req, res, next) => {
   }
 };
 
-// @desc    Create public order (demo checkout)
-// @route   POST /api/public/menu/:restaurantId/order
-// @access  Public
 exports.createPublicOrder = async (req, res, next) => {
   try {
     const { restaurantId } = req.params;
@@ -448,6 +415,7 @@ exports.createPublicOrder = async (req, res, next) => {
     }
 
     const totalAmount = Number(orderItems.reduce((sum, line) => sum + line.lineTotal, 0).toFixed(2));
+    // Card path is demo-only; cash stays pending until staff marks it.
     const paymentStatus = method === 'card' ? 'paid_demo' : 'pending_cash';
     const paymentReference =
       method === 'card'
@@ -515,9 +483,6 @@ const serializePublicOrder = (order) => ({
   updatedAt: order.updatedAt
 });
 
-// @desc    Guest: poll order status (no auth)
-// @route   GET /api/public/order/:orderId
-// @access  Public
 exports.getPublicOrderById = async (req, res, next) => {
   try {
     const { orderId } = req.params;

@@ -99,41 +99,35 @@ const restaurantSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  // Public-menu metrics: outer key is YYYY-MM-DD (UTC). Nested maps use controller-sanitized segment keys.
   dailyScans: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → count of distinct browser-day visits (client reports first visit of day). */
   dailyUniqueVisitors: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → sum of session duration seconds reported when guests leave the menu. */
   dailySessionSeconds: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → number of session-end samples (for average time). */
   dailySessionSamples: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → public orders placed (conversions). */
   dailyOrders: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → times a guest applied an allergen filter. */
   dailyFilteredViews: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → { sanitizedAllergenName: count } for range charts. */
   dailyAllergenUsage: {
     type: Object,
     default: {}
   },
-  /** YYYY-MM-DD → { menuItemId: view count } for top dishes in a date range. */
   menuItemViewsByDay: {
     type: Object,
     default: {}
@@ -154,7 +148,7 @@ const restaurantSchema = new mongoose.Schema({
     default: 'Welcome to our menu. We are glad to have you here.',
     maxlength: [300, 'Welcome message cannot exceed 300 characters']
   },
-  /** Ordered list of menu section names (public menu + staff dropdowns). Empty = use cuisine defaults. */
+  // Section labels for the menu UI; app fills from cuisine when empty/undefined.
   menuCategories: {
     type: [String],
     default: undefined
@@ -200,10 +194,9 @@ const restaurantSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate QR code URL before saving
+// If nothing was set at registration, point at the SPA public menu using FRONTEND_URL.
 restaurantSchema.pre('save', function(next) {
   if (!this.qrCode) {
-    // This will be the public menu URL for customers
     const baseUrl = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
     this.qrCode = `${baseUrl}/public/menu/${this._id}`;
   }

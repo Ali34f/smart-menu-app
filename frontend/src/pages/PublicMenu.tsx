@@ -137,6 +137,16 @@ const TRACK_STEPS = ['Received', 'Preparing', 'Ready', 'Done'] as const;
 
 const terminalOrderStatus = (s: string) => s === 'completed' || s === 'cancelled';
 
+/** Deterministic 0..1 — stable picks for the same inputs (per day + filters + item id). */
+function stableUnitRandom(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967296;
+}
+
 /** Path for API serve-image (e.g. "uploads/filename.jpg") */
 function imagePath(image: string | undefined): string | null {
   if (!image || typeof image !== 'string') return null;
@@ -556,6 +566,103 @@ const PublicMenu: React.FC = () => {
     [cart]
   );
 
+  /**
+   * Dish picks that respect allergen + dietary filters, prefer items not already in cart,
+   * boost variety vs dominant cart category, clearer dietary labelling, and fewer listed allergens.
+   */
+  const recommendedDishes = useMemo(() => {
+    const eligible = visibleItems.filter((i) => i.isAvailable);
+    if (eligible.length === 0) return [];
+
+    const cartIdSet = new Set(cart.map((c) => c.item._id));
+    const categoryQty = new Map<string, number>();
+    cart.forEach((c) => {
+      categoryQty.set(c.item.category, (categoryQty.get(c.item.category) || 0) + c.quantity);
+    });
+    let dominantCartCategory: string | null = null;
+    let maxCatQty = 0;
+    categoryQty.forEach((qty, cat) => {
+      if (qty > maxCatQty) {
+        maxCatQty = qty;
+        dominantCartCategory = cat;
+      }
+    });
+
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const filterKey = [
+      restaurantId || '',
+      dayKey,
+      [...excludedAllergenIds].sort().join(','),
+      [...requiredDietaryKeys].sort().join(',')
+    ].join('|');
+
+    const hasAllergenFilters = excludedAllergenIds.length > 0;
+    const hasDietaryFilters = requiredDietaryKeys.length > 0;
+    const cartLines = cart.length;
+
+    const scoreOne = (item: PublicMenuItem) => {
+      let score = 0;
+      const badges = dietaryBadges(item);
+      score += badges.length * 2.5;
+      const allergenTagCount = item.allergens?.length ?? 0;
+      if (allergenTagCount === 0) score += 4;
+      else score += Math.max(0, 3 - allergenTagCount * 0.4);
+
+      if (cartLines > 0) {
+        if (cartIdSet.has(item._id)) score -= 80;
+        if (dominantCartCategory) {
+          if (item.category === dominantCartCategory) score += 1.5;
+          else score += 5;
+        }
+      } else if (!cartIdSet.has(item._id)) {
+        score += 0.5;
+      }
+
+      if (hasDietaryFilters) score += 3;
+      if (hasAllergenFilters) score += 2;
+
+      score += stableUnitRandom(`${filterKey}|${item._id}`) * 1.2;
+      return score;
+    };
+
+    const buildReasons = (item: PublicMenuItem): string[] => {
+      const lines: string[] = [];
+      if (hasDietaryFilters) lines.push('Matches your dietary filters');
+      else if (hasAllergenFilters) lines.push('Suited to your allergen choices');
+      if ((item.allergens?.length ?? 0) === 0) lines.push('No listed allergens');
+      if (cartLines > 0 && dominantCartCategory) {
+        if (item.category !== dominantCartCategory) lines.push('Try another course');
+        else lines.push('Same course as your picks');
+      }
+      if (lines.length === 0) lines.push('Great place to start');
+      return Array.from(new Set(lines)).slice(0, 2);
+    };
+
+    const notInCart = eligible.filter((i) => !cartIdSet.has(i._id));
+    const pool = notInCart.length > 0 ? notInCart : eligible;
+
+    const ranked = pool
+      .map((item) => ({ item, score: scoreOne(item), reasons: buildReasons(item) }))
+      .sort((a, b) => b.score - a.score);
+
+    const seen = new Set<string>();
+    const out: Array<{ item: PublicMenuItem; reasons: string[] }> = [];
+    for (const row of ranked) {
+      if (seen.has(row.item._id)) continue;
+      seen.add(row.item._id);
+      out.push({ item: row.item, reasons: row.reasons });
+      if (out.length >= 6) break;
+    }
+
+    if (notInCart.length === 0 && eligible.length > 0) {
+      return out.map((row) => ({
+        ...row,
+        reasons: ['Already in your cart', 'Open cart to review or keep browsing']
+      }));
+    }
+    return out;
+  }, [visibleItems, cart, excludedAllergenIds, requiredDietaryKeys, restaurantId]);
+
   useEffect(() => {
     if (cartCount === 0) setShowCartSheet(false);
   }, [cartCount]);
@@ -717,6 +824,7 @@ const PublicMenu: React.FC = () => {
                     'Use category tabs to jump to starters, mains, drinks, and more.',
                     'Filter allergens to hide dishes that are not suitable—your cart stays separate.',
                     'Use dietary filters to show only dishes that match your preferences (e.g. vegan).',
+                    'Recommended for you suggests dishes that match your filters and cart—tap for details.',
                     'Tap any dish for details, dietary tags, and to add to your order.'
                   ].map((line) => (
                     <li key={line} className="flex gap-3 text-left">
@@ -877,6 +985,96 @@ const PublicMenu: React.FC = () => {
             </div>
           </section>
         )}
+
+        {!loading && !error && recommendedDishes.length > 0 && (
+          <section
+            className="mb-6 rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-teal-50/60 px-4 py-4 shadow-sm"
+            aria-label="Recommended dishes"
+          >
+            <div className="mb-3">
+              <h2 className="text-sm font-semibold text-emerald-950 tracking-tight">Recommended for you</h2>
+              <p className="text-xs text-emerald-900/80 mt-1 leading-relaxed">
+                Picks that match your allergen and dietary filters, avoid what you already added, and suggest variety
+                across courses when your cart has items.
+              </p>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory">
+              {recommendedDishes.map(({ item, reasons }) => {
+                const blobUrl = imageBlobUrls[item._id];
+                const normalizedPath = imagePath(item.image);
+                const hasImagePath = !!normalizedPath;
+                const imageSrc = blobUrl || directImageUrl(item.image, getPublicOriginBaseUrl());
+                const showImg = !!imageSrc && !failedImages.has(item._id);
+                return (
+                  <article
+                    key={item._id}
+                    className="snap-start shrink-0 w-[min(17.5rem,calc(100vw-2.5rem))] rounded-2xl border border-emerald-100/90 bg-white shadow-sm flex flex-col overflow-hidden"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openMenuItemDetail(item)}
+                      className="text-left flex flex-1 flex-col min-h-0"
+                    >
+                      <div className="relative h-28 w-full bg-gray-100">
+                        {showImg ? (
+                          <img
+                            src={imageSrc || undefined}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                            onError={() => setFailedImages((prev) => new Set(prev).add(item._id))}
+                          />
+                        ) : hasImagePath ? (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <div className="animate-pulse rounded-full bg-gray-200 w-9 h-9" />
+                          </div>
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center">
+                            <NoImageIcon className="w-12 h-12 text-gray-300" />
+                          </div>
+                        )}
+                        <span className="absolute top-2 left-2 rounded-full bg-emerald-600/95 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white shadow-sm">
+                          Pick
+                        </span>
+                      </div>
+                      <div className="p-3 flex flex-col flex-1 min-h-0">
+                        <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug">{item.name}</h3>
+                        <p className="text-xs text-emerald-700 font-semibold mt-1">{formatPrice(item.price)}</p>
+                        <ul className="mt-2 space-y-0.5 flex-1">
+                          {reasons.map((r) => (
+                            <li key={r} className="text-[11px] text-gray-600 leading-snug flex gap-1.5">
+                              <span className="text-emerald-500 shrink-0" aria-hidden>
+                                ·
+                              </span>
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </button>
+                    {item.isAvailable && (
+                      <div className="px-3 pb-3 pt-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToCart(item);
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 transition"
+                        >
+                          Add to order
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {!loading && !error && groupedItems.length > 0 ? (
           <section className="sticky top-0 z-20 mb-5 -mx-3 sm:-mx-4 bg-gray-50/95 backdrop-blur border-y border-gray-100">
             <div className="px-3 sm:px-4 py-2.5 overflow-x-auto">

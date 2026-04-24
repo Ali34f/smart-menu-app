@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Global list (not scoped by restaurant); menu items reference these ids.
 const allergenSchema = new mongoose.Schema({
   name: {
     type: String,

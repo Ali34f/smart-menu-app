@@ -4,9 +4,6 @@ const PublicOrder = require('../models/PublicOrder');
 const { logActivityHelper } = require('./activity_controller');
 const { createNotification } = require('../utils/notificationHelper');
 
-// @desc    Get all menu items for restaurant
-// @route   GET /api/menu
-// @access  Private
 exports.getMenuItems = async (req, res, next) => {
   try {
     const menuItems = await MenuItem.find({ restaurantId: req.restaurantId })
@@ -24,9 +21,6 @@ exports.getMenuItems = async (req, res, next) => {
   }
 };
 
-// @desc    Get single menu item
-// @route   GET /api/menu/:id
-// @access  Private
 exports.getMenuItem = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findOne({
@@ -52,20 +46,14 @@ exports.getMenuItem = async (req, res, next) => {
   }
 };
 
-// @desc    Create new menu item
-// @route   POST /api/menu
-// @access  Private (canManageMenu permission)
 exports.createMenuItem = async (req, res, next) => {
   try {
-    // Add restaurant ID to request body
     req.body.restaurantId = req.restaurantId;
 
     const menuItem = await MenuItem.create(req.body);
 
-    // Populate allergens and ingredients
     await menuItem.populate('ingredients allergens');
 
-    // Log activity
     await logActivityHelper(
       req.restaurantId,
       req.user.id,
@@ -92,9 +80,6 @@ exports.createMenuItem = async (req, res, next) => {
   }
 };
 
-// @desc    Update menu item
-// @route   PUT /api/menu/:id
-// @access  Private (canManageMenu permission)
 exports.updateMenuItem = async (req, res, next) => {
   try {
     let menuItem = await MenuItem.findOne({
@@ -118,7 +103,7 @@ exports.updateMenuItem = async (req, res, next) => {
       }
     ).populate('ingredients allergens');
 
-    // Log activity
+    // Log activity 
     await logActivityHelper(
       req.restaurantId,
       req.user.id,
@@ -145,9 +130,6 @@ exports.updateMenuItem = async (req, res, next) => {
   }
 };
 
-// @desc    Delete menu item
-// @route   DELETE /api/menu/:id
-// @access  Private (canManageMenu permission)
 exports.deleteMenuItem = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findOne({
@@ -165,7 +147,6 @@ exports.deleteMenuItem = async (req, res, next) => {
     const itemName = menuItem.name;
     await menuItem.deleteOne();
 
-    // Log activity
     await logActivityHelper(
       req.restaurantId,
       req.user.id,
@@ -192,9 +173,6 @@ exports.deleteMenuItem = async (req, res, next) => {
   }
 };
 
-// @desc    Get menu items by category
-// @route   GET /api/menu/category/:category
-// @access  Private
 exports.getMenuItemsByCategory = async (req, res, next) => {
   try {
     const menuItems = await MenuItem.find({
@@ -215,9 +193,6 @@ exports.getMenuItemsByCategory = async (req, res, next) => {
   }
 };
 
-// @desc    Toggle menu item availability
-// @route   PATCH /api/menu/:id/toggle
-// @access  Private
 exports.toggleAvailability = async (req, res, next) => {
   try {
     const menuItem = await MenuItem.findOne({
@@ -235,7 +210,6 @@ exports.toggleAvailability = async (req, res, next) => {
     menuItem.isAvailable = !menuItem.isAvailable;
     await menuItem.save();
 
-    // Log activity
     await logActivityHelper(
       req.restaurantId,
       req.user.id,
@@ -262,6 +236,7 @@ exports.toggleAvailability = async (req, res, next) => {
   }
 };
 
+// Public-order lifecycle; query filter skips unknown values, PATCH rejects them.
 const STAFF_ORDER_STATUSES = new Set([
   'placed',
   'confirmed',
@@ -271,9 +246,6 @@ const STAFF_ORDER_STATUSES = new Set([
   'cancelled'
 ]);
 
-// @desc    List guest orders placed from public menu
-// @route   GET /api/menu/public-orders
-// @access  Private (restaurant staff)
 exports.getPublicOrdersForStaff = async (req, res, next) => {
   try {
     if (!req.restaurantId) {
@@ -307,9 +279,6 @@ exports.getPublicOrdersForStaff = async (req, res, next) => {
   }
 };
 
-// @desc    Update guest order status (kitchen / floor)
-// @route   PATCH /api/menu/public-orders/:orderId
-// @access  Private (restaurant staff)
 exports.updatePublicOrderStatus = async (req, res, next) => {
   try {
     if (!req.restaurantId) {

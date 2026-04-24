@@ -71,7 +71,7 @@ const parseAnalyticsRange = (req) => {
   return { start, end, range: range === '30d' ? '30d' : '7d' };
 };
 
-/** Accepts http(s) origin only (no path) — ngrok, IPv4, localhost, IDN, etc. */
+// Only http(s) + host — no path, query, or userinfo (keeps trusted bases narrow).
 const parseSafeOrigin = (value) => {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().replace(/\/$/, '');
@@ -103,7 +103,7 @@ const getFrontendBaseUrl = (req) => {
   return fallback.replace(/\/$/, '');
 };
 
-/** Full public menu URL; adds ngrok bypass query on ngrok hosts so phone browsers skip the interstitial. */
+// Free ngrok URLs get an interstitial unless we append their skip flag.
 const buildPublicMenuUrl = (frontendBase, restaurantId) => {
   const base = frontendBase.replace(/\/$/, '');
   const u = new URL(`/public/menu/${String(restaurantId)}`, `${base}/`);
@@ -134,9 +134,6 @@ const getPublicApiBaseUrl = (req) => {
   return fallback;
 };
 
-// @desc    Generate QR code image
-// @route   GET /api/qr/generate
-// @access  Private
 exports.generateQRImage = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.restaurantId);
@@ -148,8 +145,7 @@ exports.generateQRImage = async (req, res, next) => {
       });
     }
 
-    // Public menu URL will use same-origin /api by default (via frontend proxy),
-    // so we no longer need to append apiBase.
+    // QR encodes the SPA public menu route, not a direct API URL.
     const publicMenuUrl = buildPublicMenuUrl(getFrontendBaseUrl(req), restaurant._id);
 
     if (restaurant.qrCode !== publicMenuUrl) {
@@ -162,7 +158,7 @@ exports.generateQRImage = async (req, res, next) => {
       ? req.query.color
       : '#000000';
 
-    // Generate QR code as data URL (high ECC — safer if a small logo is printed on top later)
+    // High ECC: still scannable if part of the code is covered (logo, print damage).
     const qrCodeDataUrl = await QRCode.toDataURL(publicMenuUrl, {
       width,
       margin: 2,
@@ -187,9 +183,6 @@ exports.generateQRImage = async (req, res, next) => {
   }
 };
 
-// @desc    Download QR code as PNG
-// @route   GET /api/qr/download
-// @access  Private
 exports.downloadQR = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.restaurantId);
@@ -253,9 +246,6 @@ exports.downloadQR = async (req, res, next) => {
   }
 };
 
-// @desc    Daily scan series + summary (query: range=7d|30d|custom, startDate, endDate for chart days)
-// @route   GET /api/qr/analytics
-// @access  Private
 exports.getScanAnalytics = async (req, res, next) => {
   try {
     const { start, end, range } = parseAnalyticsRange(req);
@@ -323,9 +313,6 @@ exports.getScanAnalytics = async (req, res, next) => {
   }
 };
 
-// @desc    Reports dashboard: top dishes, allergens in range, engagement series, compliance
-// @route   GET /api/qr/reports
-// @access  Private
 exports.getRestaurantReports = async (req, res, next) => {
   try {
     const { start, end, range } = parseAnalyticsRange(req);
@@ -438,9 +425,6 @@ exports.getRestaurantReports = async (req, res, next) => {
   }
 };
 
-// @desc    Get most-used allergen filters from public menu interactions
-// @route   GET /api/qr/allergen-analytics
-// @access  Private
 exports.getAllergenFilterAnalytics = async (req, res, next) => {
   try {
     const restaurant = await Restaurant.findById(req.restaurantId).select('allergenFilterUsage');
@@ -449,6 +433,7 @@ exports.getAllergenFilterAnalytics = async (req, res, next) => {
     }
 
     const usage = restaurant.allergenFilterUsage || {};
+    // Field is a Mongoose Map in memory; Object.entries would be wrong without branching.
     const entries = usage instanceof Map ? Array.from(usage.entries()) : Object.entries(usage);
     const normalized = entries
       .map(([name, count]) => ({

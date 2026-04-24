@@ -1,10 +1,8 @@
 const Notification = require('../models/Notification');
 
-// @desc    Get latest notifications for restaurant
-// @route   GET /api/notifications
-// @access  Private
 exports.getNotifications = async (req, res) => {
   try {
+    // e.g. platform admin with no restaurant picked yet
     if (!req.restaurantId) {
       return res.status(200).json({
         success: true,
@@ -32,9 +30,6 @@ exports.getNotifications = async (req, res) => {
   }
 };
 
-// @desc    Get unread notification count
-// @route   GET /api/notifications/unread-count
-// @access  Private
 exports.getUnreadCount = async (req, res) => {
   try {
     if (!req.restaurantId) {
@@ -62,9 +57,6 @@ exports.getUnreadCount = async (req, res) => {
   }
 };
 
-// @desc    Mark all notifications as read
-// @route   PATCH /api/notifications/mark-all-read
-// @access  Private
 exports.markAllNotificationsRead = async (req, res) => {
   try {
     if (!req.restaurantId) {
@@ -97,9 +89,6 @@ exports.markAllNotificationsRead = async (req, res) => {
   }
 };
 
-// @desc    Mark one notification as read
-// @route   PATCH /api/notifications/:id/read
-// @access  Private
 exports.markNotificationRead = async (req, res) => {
   try {
     if (!req.restaurantId) {

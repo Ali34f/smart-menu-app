@@ -96,8 +96,9 @@ const menuItemSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  // Estimated prep time in minutes (optional).
   preparationTime: {
-    type: Number, // in minutes
+    type: Number,
     default: null
   },
   spiceLevel: {
@@ -117,10 +118,8 @@ const menuItemSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create compound index to prevent duplicate menu items per restaurant
 menuItemSchema.index({ restaurantId: 1, name: 1 }, { unique: true });
 
-// Increment views
 menuItemSchema.methods.incrementViews = function() {
   this.views += 1;
   return this.save();

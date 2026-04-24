@@ -43,7 +43,6 @@ const activitySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for efficient queries
 activitySchema.index({ restaurantId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Activity', activitySchema);

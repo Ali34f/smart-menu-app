@@ -7,7 +7,6 @@ const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
 const RESTAURANT_TEAM_ROLES = ['owner', 'manager', 'staff'];
 
-/** Roles the actor may set when inviting or updating restaurant team members. */
 const rolesActorMayAssign = (actorRole) => {
   if (isPlatformAdminRole(actorRole)) {
     return ['owner', 'manager', 'staff'];
@@ -29,22 +28,19 @@ const assertMayAssignRole = (actorRole, targetRole) => {
   return null;
 };
 
-// @desc    Get all staff for restaurant
-// @route   GET /api/staff
-// @access  Private (Owner, Manager, Staff)
 exports.getStaff = async (req, res, next) => {
   try {
     let staff = [];
 
+    // Platform admins: active workspace only, and exclude self. Others: full restaurant roster.
     if (isPlatformAdminRole(req.user.role)) {
-      // Platform admins: list only the active workspace restaurant's team (not yourself)
       if (!req.restaurantId) {
         return res.status(400).json({
           success: false,
           message: 'Select an active restaurant workspace before viewing staff'
         });
       }
-
+      // Find all users belonging to this restaurant 
       staff = await User.find({
         restaurantId: req.restaurantId,
         _id: { $ne: req.user.id }
@@ -53,8 +49,6 @@ exports.getStaff = async (req, res, next) => {
         .populate('restaurantId', 'name')
         .sort({ createdAt: -1 });
     } else {
-      // Regular restaurant owners/managers see their restaurant's staff
-      // Use the user's restaurantId directly from the user document
       const userRestaurantId = req.user.restaurantId;
 
       if (!userRestaurantId) {
@@ -64,7 +58,6 @@ exports.getStaff = async (req, res, next) => {
         });
       }
 
-      // Find all users belonging to this restaurant
       staff = await User.find({
         restaurantId: userRestaurantId
       })
@@ -73,7 +66,6 @@ exports.getStaff = async (req, res, next) => {
       .sort({ createdAt: -1 });
     }
 
-    // Count pending invitations for this restaurant (active workspace for platform admins)
     const pendingInvitations = await User.countDocuments({
       restaurantId: req.restaurantId,
       invitationAccepted: false
@@ -95,15 +87,11 @@ exports.getStaff = async (req, res, next) => {
   }
 };
 
-// @desc    Add new staff member
-// @route   POST /api/staff
-// @access  Private (Owner, Manager with permission)
 exports.addStaff = async (req, res, next) => {
   try {
     const { name, email, password, role } = req.body;
     const normalizedEmail = normalizeEmail(email);
 
-    // Validation
     if (!name || !normalizedEmail || !password || !role) {
       return res.status(400).json({
         success: false,
@@ -127,7 +115,6 @@ exports.addStaff = async (req, res, next) => {
       });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({
@@ -136,14 +123,13 @@ exports.addStaff = async (req, res, next) => {
       });
     }
 
-    // Create new staff member with invitation pending
     const staff = await User.create({
       restaurantId: req.restaurantId,
       name,
       email: normalizedEmail,
       password,
       role,
-      invitationAccepted: false // New invites need to be accepted
+      invitationAccepted: false
     });
 
     await createNotification({
@@ -170,15 +156,11 @@ exports.addStaff = async (req, res, next) => {
   }
 };
 
-// @desc    Update staff member
-// @route   PUT /api/staff/:id
-// @access  Private (Owner, Manager with permission)
 exports.updateStaff = async (req, res, next) => {
   try {
     const { name, email, role, isActive } = req.body;
     const normalizedEmail = email ? normalizeEmail(email) : '';
 
-    // Find staff member
     const staff = await User.findOne({
       _id: req.params.id,
       restaurantId: req.restaurantId
@@ -267,9 +249,6 @@ exports.updateStaff = async (req, res, next) => {
   }
 };
 
-// @desc    Delete/Deactivate staff member
-// @route   DELETE /api/staff/:id
-// @access  Private (Owner only)
 exports.deleteStaff = async (req, res, next) => {
   try {
     const staff = await User.findOne({
@@ -284,7 +263,7 @@ exports.deleteStaff = async (req, res, next) => {
       });
     }
 
-    // Don't allow deleting owner
+    // cant delete owner
     if (staff.role === 'owner') {
       return res.status(403).json({
         success: false,
@@ -295,7 +274,6 @@ exports.deleteStaff = async (req, res, next) => {
     const deletedStaffName = staff.name;
     const targetRestaurantId = staff.restaurantId || req.restaurantId;
 
-    // Hard delete - completely remove from database
     await User.findByIdAndDelete(req.params.id);
 
     await createNotification({
@@ -315,9 +293,6 @@ exports.deleteStaff = async (req, res, next) => {
   }
 };
 
-// @desc    Accept invitation
-// @route   POST /api/staff/accept-invitation
-// @access  Private
 exports.acceptInvitation = async (req, res, next) => {
   try {
     const { newPassword } = req.body || {};
@@ -337,8 +312,7 @@ exports.acceptInvitation = async (req, res, next) => {
       });
     }
 
-    // Require a new password on first acceptance so temporary passwords
-    // are not kept long term.
+    // Require their own password on accept — whatever was set at invite time is not meant to stay.
     if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
       return res.status(400).json({
         success: false,

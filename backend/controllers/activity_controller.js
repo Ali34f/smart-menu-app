@@ -1,13 +1,10 @@
 const Activity = require('../models/Activity');
 
-// @desc    Get recent activities for restaurant
-// @route   GET /api/activity
-// @access  Private
 exports.getActivities = async (req, res, next) => {
   try {
     const requested = parseInt(req.query.limit, 10);
     const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 100) : 10;
-    // Workspace context is resolved by auth middleware and can differ from user.restaurantId.
+    // Active tenant comes from middleware (especially for platform roles), not always user.restaurantId.
     if (!req.restaurantId) {
       return res.status(400).json({
         success: false,
@@ -19,7 +16,6 @@ exports.getActivities = async (req, res, next) => {
       .sort({ createdAt: -1 })
       .limit(limit);
 
-    // Format the activities for frontend
     const formattedActivities = activities.map(activity => ({
       id: activity._id,
       action: activity.action,
@@ -38,9 +34,6 @@ exports.getActivities = async (req, res, next) => {
   }
 };
 
-// @desc    Log a new activity
-// @route   POST /api/activity
-// @access  Private
 exports.logActivity = async (req, res, next) => {
   try {
     const { action, itemName, emoji, details } = req.body;
@@ -70,7 +63,6 @@ exports.logActivity = async (req, res, next) => {
   }
 };
 
-// Helper function to format activity text
 function formatActivityText(action, itemName) {
   const actionTexts = {
     'menu_item_created': `New dish added: ${itemName}`,
@@ -83,7 +75,6 @@ function formatActivityText(action, itemName) {
   return actionTexts[action] || `${itemName} modified`;
 }
 
-// Helper function to get emoji for action
 function getEmojiForAction(action) {
   const emojiMap = {
     'menu_item_created': '🍽️',
@@ -96,7 +87,6 @@ function getEmojiForAction(action) {
   return emojiMap[action] || '📝';
 }
 
-// Helper function to get relative time
 function getTimeAgo(date) {
   const now = new Date();
   const diff = now - new Date(date);
@@ -114,7 +104,7 @@ function getTimeAgo(date) {
   return new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
-// Export helper for use in other controllers
+// Side effect from menu/staff flows; failures are logged only so the main request still completes.
 exports.logActivityHelper = async (restaurantId, userId, userName, action, itemName, emoji) => {
   try {
     await Activity.create({

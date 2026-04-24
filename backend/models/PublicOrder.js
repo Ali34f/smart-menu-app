@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Line items are embedded; _id: false keeps payloads small and matches how we return orders.
 const publicOrderItemSchema = new mongoose.Schema(
   {
     menuItemId: {
