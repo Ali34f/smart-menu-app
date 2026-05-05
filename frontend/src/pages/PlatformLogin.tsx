@@ -177,7 +177,7 @@ const PlatformLogin: React.FC = () => {
           ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-xs text-gray-500 dark:text-gray-400 -mt-1 mb-1">
-              Step 1 — If your account has 2FA enabled, you will be asked for an app code next.
+             If your account has 2FA enabled, you will be asked for an app code next.
             </p>
             <input
               type="email"

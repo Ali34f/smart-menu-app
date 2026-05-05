@@ -179,7 +179,7 @@ const Login: React.FC = () => {
             <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
             {!challengeToken ? (
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                Step 1: enter your email and password. If two-factor authentication is enabled on your account, you will be asked for an app code next.
+               
               </p>
             ) : null}
           </div>

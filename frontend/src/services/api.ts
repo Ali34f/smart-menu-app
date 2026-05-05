@@ -24,7 +24,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-/** These routes return 401 for wrong password/code — not "session expired". Do not redirect. */
+// These routes return 401 for wrong password/code — not "session expired".
 const isPublicAuthFailureUrl = (url: string | undefined): boolean => {
   if (!url) return false;
   return [

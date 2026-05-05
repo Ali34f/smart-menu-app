@@ -70,7 +70,7 @@ exports.protect = async (req, res, next) => {
 
     req.user.permissions = getEffectivePermissions(req.user);
 
-    // Tenant context: staff are fixed to restaurantId; platform roles may override with x-restaurant-id.
+    // Platform roles can pick the active venue (x-restaurant-id header); everyone else stays on their restaurant.
     if (isPlatformAdminRole(req.user.role)) {
       const requestedRestaurantId = (req.headers['x-restaurant-id'] || '').toString().trim();
       const managedIds = (req.user.managedRestaurantIds || []).map((id) => id.toString());
