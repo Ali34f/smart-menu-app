@@ -7,6 +7,8 @@ interface MenuItem {
   price: number;
   image?: string;
   allergens?: string[];
+  /** Staff confirmed the dish has none of the listed allergens (after review). */
+  confirmedNoAllergens?: boolean;
   isAvailable: boolean;
   dietaryInfo?: {
     vegetarian?: boolean;

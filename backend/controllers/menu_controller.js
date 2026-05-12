@@ -4,6 +4,56 @@ const PublicOrder = require('../models/PublicOrder');
 const { logActivityHelper } = require('./activity_controller');
 const { createNotification } = require('../utils/notificationHelper');
 
+function normalizeAllergenPayloadForCreate(body) {
+  const { allergens: rawAllergens, confirmedNoAllergens: rawConfirm, ...rest } = body;
+  let allergens = Array.isArray(rawAllergens) ? rawAllergens : [];
+  let confirmedNoAllergens = Boolean(rawConfirm);
+  if (confirmedNoAllergens) allergens = [];
+  if (allergens.length > 0) confirmedNoAllergens = false;
+  return { ...rest, allergens, confirmedNoAllergens };
+}
+
+function normalizeAllergenPayloadForUpdate(existing, body) {
+  const patch = { ...body };
+  delete patch.restaurantId;
+
+  const hasAllergens = Object.prototype.hasOwnProperty.call(body, 'allergens');
+  const hasConfirm = Object.prototype.hasOwnProperty.call(body, 'confirmedNoAllergens');
+
+  let nextAllergens = existing.allergens;
+  let nextConfirm = existing.confirmedNoAllergens === true;
+
+  if (hasAllergens) {
+    nextAllergens = Array.isArray(body.allergens) ? body.allergens : existing.allergens;
+  }
+  if (hasConfirm) {
+    nextConfirm = Boolean(body.confirmedNoAllergens);
+  }
+
+  if (hasAllergens && Array.isArray(body.allergens) && body.allergens.length > 0) {
+    nextConfirm = false;
+  }
+  if (hasConfirm && body.confirmedNoAllergens === true) {
+    nextAllergens = [];
+    nextConfirm = true;
+  }
+  if (
+    hasAllergens &&
+    Array.isArray(body.allergens) &&
+    body.allergens.length === 0 &&
+    !(hasConfirm && body.confirmedNoAllergens === true)
+  ) {
+    nextConfirm = false;
+  }
+
+  if (hasAllergens || hasConfirm) {
+    patch.allergens = nextAllergens;
+    patch.confirmedNoAllergens = nextConfirm;
+  }
+
+  return patch;
+}
+
 exports.getMenuItems = async (req, res, next) => {
   try {
     const menuItems = await MenuItem.find({ restaurantId: req.restaurantId })
@@ -48,9 +98,12 @@ exports.getMenuItem = async (req, res, next) => {
 
 exports.createMenuItem = async (req, res, next) => {
   try {
-    req.body.restaurantId = req.restaurantId;
+    const payload = normalizeAllergenPayloadForCreate({
+      ...req.body,
+      restaurantId: req.restaurantId
+    });
 
-    const menuItem = await MenuItem.create(req.body);
+    const menuItem = await MenuItem.create(payload);
 
     await menuItem.populate('ingredients allergens');
 
@@ -94,9 +147,11 @@ exports.updateMenuItem = async (req, res, next) => {
       });
     }
 
+    const patch = normalizeAllergenPayloadForUpdate(menuItem, req.body);
+
     menuItem = await MenuItem.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      patch,
       {
         new: true,
         runValidators: true

@@ -21,6 +21,7 @@ interface FormData {
   category: string;
   image: string;
   allergens: string[];
+  confirmedNoAllergens: boolean;
   dietaryInfo: string[];
   isAvailable: boolean;
 }
@@ -46,6 +47,7 @@ const AddMenuItem: React.FC = () => {
     category: 'Mains',
     image: '',
     allergens: [],
+    confirmedNoAllergens: false,
     dietaryInfo: [],
     isAvailable: true
   });
@@ -97,12 +99,24 @@ const AddMenuItem: React.FC = () => {
   };
 
   const handleCheckboxChange = (category: 'allergens' | 'dietaryInfo', value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [category]: prev[category].includes(value)
-        ? prev[category].filter(item => item !== value)
-        : [...prev[category], value]
-    }));
+    setFormData((prev) => {
+      if (category === 'allergens') {
+        const nextAllergens = prev.allergens.includes(value)
+          ? prev.allergens.filter((id) => id !== value)
+          : [...prev.allergens, value];
+        return {
+          ...prev,
+          allergens: nextAllergens,
+          confirmedNoAllergens: nextAllergens.length > 0 ? false : prev.confirmedNoAllergens
+        };
+      }
+      return {
+        ...prev,
+        [category]: prev[category].includes(value)
+          ? prev[category].filter((item) => item !== value)
+          : [...prev[category], value]
+      };
+    });
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,16 +179,22 @@ const AddMenuItem: React.FC = () => {
         category: formData.category,
         image: formData.image || undefined,
         allergens: formData.allergens,
+        confirmedNoAllergens: formData.confirmedNoAllergens,
         dietaryInfo: dietaryInfoObject,
         isAvailable: formData.isAvailable
       };
 
-      await menuService.createItem(dataToSubmit);
+      const created = await menuService.createItem(dataToSubmit);
+      const newId: string | undefined = created?.data?._id;
       success(`${formData.name} added to menu`);
 
-      setTimeout(() => {
-        navigate('/menu-items');
-      }, 1500);
+      navigate('/menu-items', {
+        state: {
+          highlightId: newId,
+          highlightMessage: `${formData.name} added`,
+          highlightKind: 'added'
+        }
+      });
     } catch (error: any) {
       console.error('Error creating menu item:', error);
       showError(error.response?.data?.message || 'Could not add item. Please try again.');
@@ -416,6 +436,32 @@ const AddMenuItem: React.FC = () => {
                   ))}
                 </div>
               )}
+              <div className="mt-4 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/40 p-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.confirmedNoAllergens}
+                    disabled={formData.allergens.length > 0}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setFormData((prev) => ({
+                        ...prev,
+                        confirmedNoAllergens: checked,
+                        allergens: checked ? [] : prev.allergens
+                      }));
+                    }}
+                    className="mt-1 w-4 h-4 text-green-600 rounded focus:ring-green-500 border-gray-300 disabled:opacity-50"
+                  />
+                  <span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-white block">
+                      This dish has none of the listed allergens (I have reviewed it)
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-1">
+                      Use this when the dish is free of all standard allergens you list for customers. You cannot select this while any allergen is ticked above.
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Dietary Options */}

@@ -295,12 +295,19 @@ const Ingredients: React.FC = () => {
     });
   });
   const totalWithAllergens = Object.values(allergenCounts).reduce((s, c) => s + c, 0);
-  const allergenDistribution = Object.entries(allergenCounts).map(([name, count]) => ({
-    name,
-    count,
-    percentage: totalWithAllergens > 0 ? Math.round((count / totalWithAllergens) * 100) : 0
-  }));
-  const colors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#6B7280'];
+  const colors = ['#EF4444', '#F59E0B', '#3B82F6', '#8B5CF6', '#10B981', '#14B8A6', '#EC4899', '#6B7280'];
+  /** Keep raw fractions so segments meet exactly; round only for display. */
+  const allergenDistribution = Object.entries(allergenCounts)
+    .map(([name, count], idx) => ({
+      name,
+      count,
+      fraction: totalWithAllergens > 0 ? count / totalWithAllergens : 0,
+      percentage: totalWithAllergens > 0 ? Math.round((count / totalWithAllergens) * 100) : 0,
+      color: colors[idx % colors.length]
+    }))
+    .sort((a, b) => b.count - a.count);
+  const donutRadius = 40;
+  const donutCirc = 2 * Math.PI * donutRadius;
 
   const recentlyAdded = [...ingredients]
     .sort((a, b) => (new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()))
@@ -839,52 +846,88 @@ const Ingredients: React.FC = () => {
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-                  <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-4">{t('allergenDistribution')}</h3>
-                  <div className="flex flex-col md:flex-row items-center gap-6">
-                    <div className="relative w-40 h-40 flex-shrink-0">
-                      <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full">
-                        {allergenDistribution.length > 0 ? (
-                          allergenDistribution.map((item, i) => {
-                            const pct = item.percentage;
-                            const circum = 2 * Math.PI * 35;
-                            const segmentLen = (pct / 100) * circum;
-                            const offset = allergenDistribution.slice(0, i).reduce((s, x) => s + (x.percentage / 100) * circum, 0);
-                            return (
-                              <circle
-                                key={item.name}
-                                cx="50"
-                                cy="50"
-                                r="35"
-                                fill="none"
-                                stroke={colors[i % colors.length]}
-                                strokeWidth="18"
-                                strokeDasharray={`${segmentLen} ${circum - segmentLen}`}
-                                strokeDashoffset={`-${offset}`}
-                              />
-                            );
-                          })
-                        ) : (
-                          <circle cx="50" cy="50" r="35" fill="none" stroke="#e5e7eb" strokeWidth="18" />
-                        )}
-                      </svg>
-                    </div>
-                    <div className="space-y-2 flex-1">
-                      {allergenDistribution.length > 0 ? (
-                        allergenDistribution.map((item, i) => (
-                          <div key={item.name} className="flex items-center space-x-2">
-                            <div
-                              className="w-3 h-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: colors[i % colors.length] }}
+                  <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-1">{t('allergenDistribution')}</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+                    Share of allergens across your ingredients
+                  </p>
+
+                  {allergenDistribution.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 py-4">No allergen data yet</p>
+                  ) : (
+                    <div className="flex flex-col items-center gap-5">
+                      <div className="relative w-40 h-40 flex-shrink-0">
+                        <svg
+                          viewBox="0 0 100 100"
+                          className="w-full h-full"
+                          role="img"
+                          aria-label="Allergen distribution"
+                        >
+                          <g transform="rotate(-90 50 50)">
+                            {(() => {
+                              let cumulative = 0;
+                              return allergenDistribution.map((segment) => {
+                                const dash = segment.fraction * donutCirc;
+                                const offset = -cumulative * donutCirc;
+                                cumulative += segment.fraction;
+                                return (
+                                  <circle
+                                    key={segment.name}
+                                    cx="50"
+                                    cy="50"
+                                    r={donutRadius}
+                                    fill="none"
+                                    stroke={segment.color}
+                                    strokeWidth="14"
+                                    strokeLinecap="butt"
+                                    strokeDasharray={`${dash} ${donutCirc}`}
+                                    strokeDashoffset={offset}
+                                  />
+                                );
+                              });
+                            })()}
+                          </g>
+                          <circle cx="50" cy="50" r="26" className="fill-white dark:fill-gray-800" />
+                          <text
+                            x="50"
+                            y="48"
+                            textAnchor="middle"
+                            className="fill-gray-900 dark:fill-white"
+                            style={{ fontSize: '11px', fontWeight: 700 }}
+                          >
+                            {totalWithAllergens}
+                          </text>
+                          <text
+                            x="50"
+                            y="60"
+                            textAnchor="middle"
+                            className="fill-gray-500 dark:fill-gray-400"
+                            style={{ fontSize: '6px' }}
+                          >
+                            tags
+                          </text>
+                        </svg>
+                      </div>
+                      <ul className="w-full space-y-2">
+                        {allergenDistribution.map((segment) => (
+                          <li key={segment.name} className="flex items-center gap-2 text-sm">
+                            <span
+                              className="w-3 h-3 rounded-full flex-shrink-0 ring-1 ring-black/5 dark:ring-white/10"
+                              style={{ backgroundColor: segment.color }}
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{item.name}</span>
-                            <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{item.percentage}%</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400">No allergen data yet</p>
-                      )}
+                            <span className="flex-1 min-w-0 truncate text-gray-800 dark:text-gray-200" title={segment.name}>
+                              {segment.name}
+                            </span>
+                            <span className="tabular-nums text-gray-600 dark:text-gray-400 flex-shrink-0">
+                              {segment.percentage}%
+                              <span className="ml-1 text-gray-400 dark:text-gray-500 font-normal">
+                                ({segment.count})
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">

@@ -375,7 +375,16 @@ exports.getRestaurantReports = async (req, res, next) => {
           total: { $sum: 1 },
           tagged: {
             $sum: {
-              $cond: [{ $gt: [{ $size: { $ifNull: ['$allergens', []] } }, 0] }, 1, 0]
+              $cond: [
+                {
+                  $or: [
+                    { $gt: [{ $size: { $ifNull: ['$allergens', []] } }, 0] },
+                    { $eq: ['$confirmedNoAllergens', true] }
+                  ]
+                },
+                1,
+                0
+              ]
             }
           }
         }

@@ -36,6 +36,7 @@ interface MenuItem {
   category: string;
   image?: string;
   allergens: (string | Allergen)[];
+  confirmedNoAllergens?: boolean;
   dietaryInfo: string[];
   isAvailable: boolean;
 }
@@ -74,6 +75,15 @@ const Menu: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ id: string; name: string } | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  /** Row to flash + scroll into view after Add/Edit returns here. */
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const [highlightedItemKind, setHighlightedItemKind] = useState<'added' | 'updated' | null>(null);
+  const highlightHandledRef = useRef(false);
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const navState = (location.state ?? null) as
+    | { highlightId?: string; highlightMessage?: string; highlightKind?: 'added' | 'updated' }
+    | null;
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
@@ -288,6 +298,66 @@ const Menu: React.FC = () => {
       selectAllRef.current.indeterminate = partiallyFilteredSelected;
     }
   }, [partiallyFilteredSelected]);
+
+  useEffect(() => {
+    if (highlightHandledRef.current) return;
+    if (loading) return;
+    const targetId = navState?.highlightId;
+    if (!targetId) return;
+
+    const itemExistsInList = menuItems.some((it) => it._id === targetId);
+    if (!itemExistsInList) return;
+
+    const targetIndex = sortedFilteredItems.findIndex((it) => it._id === targetId);
+
+    if (targetIndex === -1) {
+      if (searchQuery !== '') setSearchQuery('');
+      if (selectedCategory !== 'All Categories') setSelectedCategory('All Categories');
+      if (selectedStatus !== 'All Status') setSelectedStatus('All Status');
+      return;
+    }
+
+    const targetPage = Math.floor(targetIndex / itemsPerPage) + 1;
+    setCurrentPage(targetPage);
+    setHighlightedItemId(targetId);
+    setHighlightedItemKind(navState.highlightKind ?? null);
+    highlightHandledRef.current = true;
+
+    if (navState.highlightMessage) {
+      toast.success(navState.highlightMessage);
+    }
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [
+    loading,
+    menuItems,
+    sortedFilteredItems,
+    navState,
+    searchQuery,
+    selectedCategory,
+    selectedStatus,
+    itemsPerPage,
+    navigate,
+    location.pathname
+  ]);
+
+  useEffect(() => {
+    if (!highlightedItemId) return;
+    const scrollTimer = setTimeout(() => {
+      const row = rowRefs.current[highlightedItemId];
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 60);
+    const clearTimer = setTimeout(() => {
+      setHighlightedItemId(null);
+      setHighlightedItemKind(null);
+    }, 5000);
+    return () => {
+      clearTimeout(scrollTimer);
+      clearTimeout(clearTimer);
+    };
+  }, [highlightedItemId, currentPage]);
   useEffect(() => {
     if (!resizingColumn) return;
     const handleMouseMove = (e: MouseEvent) => {
@@ -825,7 +895,14 @@ const Menu: React.FC = () => {
                         return (
                       <motion.tr
                         key={item._id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                        ref={(el) => {
+                          rowRefs.current[item._id] = el;
+                        }}
+                        className={`transition-colors duration-700 ease-out ${
+                          item._id === highlightedItemId
+                            ? 'bg-emerald-50/90 dark:bg-emerald-900/25 border-l-4 border-l-emerald-500'
+                            : 'border-l-4 border-l-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
                         initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
                         animate={shouldReduceMotion ? undefined : { opacity: 1, y: 0 }}
                         exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
@@ -859,7 +936,20 @@ const Menu: React.FC = () => {
 
                         {/* Dish Name */}
                         <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</div>
+                            {item._id === highlightedItemId && highlightedItemKind && (
+                              <motion.span
+                                initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.9 }}
+                                animate={shouldReduceMotion ? undefined : { opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.18 }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold uppercase tracking-wide"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                {highlightedItemKind === 'added' ? 'Just added' : 'Just updated'}
+                              </motion.span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Category */}
@@ -886,8 +976,15 @@ const Menu: React.FC = () => {
                                   {a.label}
                                 </span>
                               ))}
-                              {allergenBadges.length === 0 && (
-                                <span className="text-xs text-gray-400 dark:text-gray-500">None</span>
+                              {allergenBadges.length === 0 && item.confirmedNoAllergens === true && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-600 text-white">
+                                  Verified: no listed allergens
+                                </span>
+                              )}
+                              {allergenBadges.length === 0 && item.confirmedNoAllergens !== true && (
+                                <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
+                                  Needs allergen review
+                                </span>
                               )}
                           </div>
                         </td>

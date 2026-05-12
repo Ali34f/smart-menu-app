@@ -40,6 +40,7 @@ interface MenuItem {
   _id: string;
   name: string;
   allergens?: { _id: string; name: string }[] | string[];
+  confirmedNoAllergens?: boolean;
 }
 
 const ALLERGEN_ICON_MAP: Record<string, string> = {
@@ -154,9 +155,14 @@ const Allergens: React.FC = () => {
     : allergens;
 
   const totalDishes = menuItems.length;
-  const itemsWithAllergens = menuItems.filter((m) => m.allergens && Array.isArray(m.allergens));
-  const fullyTagged = itemsWithAllergens.length;
-  const needAttention = Math.max(0, totalDishes - fullyTagged);
+  const dishAllergenComplete = (m: MenuItem) => {
+    if (m.confirmedNoAllergens === true) return true;
+    const list = m.allergens;
+    if (!list || !Array.isArray(list)) return false;
+    return list.length > 0;
+  };
+  const needAttention = menuItems.filter((m) => !dishAllergenComplete(m)).length;
+  const fullyTagged = totalDishes - needAttention;
   const fullyTaggedPct = totalDishes ? Math.round((fullyTagged / totalDishes) * 100) : 0;
   const needAttentionPct = totalDishes ? Math.round((needAttention / totalDishes) * 100) : 0;
   const partiallyTagged = 0;

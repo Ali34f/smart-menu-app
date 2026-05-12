@@ -10,6 +10,7 @@ interface MenuItem {
   _id: string;
   name: string;
   allergens?: { _id: string; name: string }[] | string[];
+  confirmedNoAllergens?: boolean;
 }
 
 const AllergenComplianceReport: React.FC = () => {
@@ -37,14 +38,30 @@ const AllergenComplianceReport: React.FC = () => {
   }, []);
 
   const totalDishes = menuItems.length;
-  const withAllergens = menuItems.filter((m) => m.allergens && Array.isArray(m.allergens));
-  const fullyTagged = withAllergens.length;
-  const needAttention = totalDishes - fullyTagged;
+
+  /** Match backend reports: complete if at least one allergen recorded OR staff confirmed none after review. */
+  const itemNeedsAllergenAttention = (item: MenuItem): boolean => {
+    if (item.confirmedNoAllergens === true) return false;
+    const list = item.allergens;
+    if (!list || !Array.isArray(list)) return true;
+    return list.length === 0;
+  };
+
+  const needAttention = menuItems.filter(itemNeedsAllergenAttention).length;
+  const fullyTagged = totalDishes - needAttention;
 
   const getStatus = (item: MenuItem) => {
-    if (!item.allergens || !Array.isArray(item.allergens)) return 'Not tagged';
+    if (itemNeedsAllergenAttention(item)) return 'Needs attention';
+    if (item.confirmedNoAllergens === true) return 'No allergens (confirmed)';
     return 'Fully tagged';
   };
+
+  const sortedMenuItems = [...menuItems].sort((a, b) => {
+    const da = itemNeedsAllergenAttention(a) ? 0 : 1;
+    const db = itemNeedsAllergenAttention(b) ? 0 : 1;
+    if (da !== db) return da - db;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
 
   const getAllergenNames = (item: MenuItem): string[] => {
     const list = item.allergens;
@@ -101,9 +118,13 @@ const AllergenComplianceReport: React.FC = () => {
       doc.setFontSize(10);
       doc.text(`Total dishes: ${totalDishes}`, margin, y);
       y += lineH + 1;
-      doc.text(`Fully tagged: ${fullyTagged}`, margin, y);
+      doc.text(
+        `Allergen info complete (tagged or confirmed none): ${fullyTagged}`,
+        margin,
+        y
+      );
       y += lineH + 1;
-      doc.text(`Need attention: ${needAttention}`, margin, y);
+      doc.text(`Need attention (not tagged and not confirmed): ${needAttention}`, margin, y);
       y += lineH + 5;
 
       doc.setFont('helvetica', 'bold');
@@ -117,7 +138,7 @@ const AllergenComplianceReport: React.FC = () => {
         doc.text('No menu items yet.', margin, y);
         y += lineH * 2;
       } else {
-        for (const item of menuItems) {
+        for (const item of sortedMenuItems) {
           const status = getStatus(item);
           const names = getAllergenNames(item).join(', ') || '—';
           const dishLines = doc.splitTextToSize(item.name, textW);
@@ -216,8 +237,9 @@ const AllergenComplianceReport: React.FC = () => {
                     <p className="text-2xl font-bold text-gray-800 dark:text-white">{totalDishes}</p>
                   </div>
                   <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Fully tagged</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Complete</p>
                     <p className="text-2xl font-bold text-green-700 dark:text-green-400">{fullyTagged}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Tagged or confirmed none</p>
                   </div>
                   <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-4">
                     <p className="text-sm text-gray-500 dark:text-gray-400">Need attention</p>
@@ -226,6 +248,11 @@ const AllergenComplianceReport: React.FC = () => {
                 </div>
 
                 <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-3">Dishes and allergen status</h3>
+                {needAttention > 0 && (
+                  <p className="text-sm text-amber-800 dark:text-amber-200/90 mb-3">
+                    Rows that <span className="font-semibold">need attention</span> are listed first and highlighted. Mark allergens on the dish, or use &quot;confirmed no allergens&quot; on the menu item when the dish has none of the standard allergens.
+                  </p>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead>
@@ -243,15 +270,24 @@ const AllergenComplianceReport: React.FC = () => {
                           </td>
                         </tr>
                       ) : (
-                        menuItems.map((item) => (
-                          <tr key={item._id} className="border-b border-gray-100 dark:border-gray-700">
+                        sortedMenuItems.map((item) => (
+                          <tr
+                            key={item._id}
+                            className={`border-b border-gray-100 dark:border-gray-700 ${
+                              itemNeedsAllergenAttention(item)
+                                ? 'bg-amber-50/80 dark:bg-amber-950/25'
+                                : ''
+                            }`}
+                          >
                             <td className="py-3 pr-4 font-medium text-gray-800 dark:text-white">{item.name}</td>
                             <td className="py-3 pr-4">
                               <span
                                 className={
-                                  getStatus(item) === 'Fully tagged'
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : 'text-amber-600 dark:text-amber-400'
+                                  itemNeedsAllergenAttention(item)
+                                    ? 'font-semibold text-amber-700 dark:text-amber-400'
+                                    : getStatus(item) === 'No allergens (confirmed)'
+                                    ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                                    : 'text-green-600 dark:text-green-400'
                                 }
                               >
                                 {getStatus(item)}

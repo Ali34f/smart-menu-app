@@ -17,6 +17,7 @@ interface PublicMenuItem {
   category: string;
   image?: string;
   allergens?: PublicAllergen[];
+  confirmedNoAllergens?: boolean;
   dietaryInfo?: {
     vegetarian?: boolean;
     vegan?: boolean;
@@ -1227,6 +1228,13 @@ const PublicMenu: React.FC = () => {
                               ))}
                             </div>
                           )}
+                          {(!item.allergens || item.allergens.length === 0) && item.confirmedNoAllergens === true && (
+                            <div className="mt-2">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[11px] font-medium border border-emerald-200">
+                                No listed allergens (kitchen confirmed)
+                              </span>
+                            </div>
+                          )}
                           {dietaryBadges(item).length > 0 && (
                             <div className="flex flex-wrap gap-1.5 mt-2">
                               {dietaryBadges(item).map((d) => (
@@ -1365,6 +1373,16 @@ const PublicMenu: React.FC = () => {
                   </div>
                 </div>
               )}
+              {(!selectedItem.allergens || selectedItem.allergens.length === 0) &&
+                selectedItem.confirmedNoAllergens === true && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Allergens</p>
+                    <p className="text-sm text-emerald-800 bg-emerald-50 rounded-lg px-3 py-2 border border-emerald-100">
+                      This dish has none of the allergens listed on our menu. Information has been reviewed by the
+                      kitchen.
+                    </p>
+                  </div>
+                )}
               {dietaryBadges(selectedItem).length > 0 && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Dietary options</p>

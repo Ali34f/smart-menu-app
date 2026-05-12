@@ -40,6 +40,11 @@ const menuItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Allergen'
   }],
+  /** Staff explicitly confirmed the dish was reviewed and contains none of the standard listed allergens. */
+  confirmedNoAllergens: {
+    type: Boolean,
+    default: false
+  },
   dietaryInfo: {
     vegetarian: {
       type: Boolean,
