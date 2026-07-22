@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import Icon from '@mdi/react';
 import toast from 'react-hot-toast';
@@ -32,13 +32,15 @@ import {
   mdiCheckCircle,
   mdiInformationOutline,
   mdiPlaylistEdit,
-  mdiDragVertical
+  mdiDragVertical,
+  mdiCreditCardOutline
 } from '@mdi/js';
 import ProfileDropdown from '../components/ProfileDropdown';
 import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
-import { restaurantService, CUISINE_OPTIONS } from '../services/restaurantService';
+import { restaurantService, CUISINE_OPTIONS, type SubscriptionSummary } from '../services/restaurantService';
+import { billingService } from '../services/billingService';
 import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
@@ -141,6 +143,7 @@ const Toggle: React.FC<{ checked: boolean; onChange: () => void }> = ({
 
 const Settings: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const userEmail = localStorage.getItem('userEmail') || '';
   const userRole = (localStorage.getItem('userRole') || 'staff').toLowerCase();
   const profilePicture = localStorage.getItem('profilePicture');
@@ -176,6 +179,11 @@ const Settings: React.FC = () => {
   const [menuSectionRows, setMenuSectionRows] = useState<MenuSectionRow[]>([]);
   const [newSectionName, setNewSectionName] = useState('');
   const [menuSectionsSaving, setMenuSectionsSaving] = useState(false);
+
+  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary | null>(null);
+  const [billingLoaded, setBillingLoaded] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<'basic' | 'premium' | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const menuSectionSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -229,18 +237,69 @@ const Settings: React.FC = () => {
           setHoursForm(next);
         }
         setRestaurantName(data.name || '');
+        setSubscriptionSummary(data.subscription ?? null);
         const defaults = getCategoriesForCuisine(data.cuisineType || 'Indian');
         const names =
           data.menuCategories && data.menuCategories.length > 0 ? [...data.menuCategories] : [...defaults];
         setMenuSectionRows(namesToMenuRows(names));
       } catch (e) {
         console.error('Failed to load restaurant:', e);
+      } finally {
+        setBillingLoaded(true);
       }
     };
     load();
   }, []);
 
+  useEffect(() => {
+    const billingFlag = searchParams.get('billing');
+    if (!billingFlag) return;
+    if (billingFlag === 'success') {
+      toast.success('Checkout completed. Your plan updates when Stripe confirms payment.');
+      restaurantService
+        .getRestaurant()
+        .then((d) => setSubscriptionSummary(d.subscription ?? null))
+        .catch(() => {});
+    } else if (billingFlag === 'canceled') {
+      toast('Checkout was canceled.', { icon: 'ℹ️' });
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('billing');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const roleLabel = formatRoleLabel(userRole);
+  const mayManageBilling = ['owner', 'platform_admin', 'super_owner'].includes(userRole);
+
+  const startCheckout = async (plan: 'basic' | 'premium') => {
+    setCheckoutLoading(plan);
+    try {
+      const res = await billingService.createCheckoutSession(plan);
+      const url = res.data?.data?.url;
+      if (url) window.location.assign(url);
+      else toast.error((res.data as { message?: string })?.message || 'No checkout URL returned');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Could not start checkout');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
+  const openPortal = async () => {
+    setPortalLoading(true);
+    try {
+      const res = await billingService.createPortalSession();
+      const url = res.data?.data?.url;
+      if (url) window.location.assign(url);
+      else toast.error((res.data as { message?: string })?.message || 'No portal URL');
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      toast.error(err.response?.data?.message || 'Could not open billing portal');
+    } finally {
+      setPortalLoading(false);
+    }
+  };
   const shouldReduceMotion = useReducedMotion();
 
   const handleSaveAccount = async () => {
@@ -763,6 +822,95 @@ const Settings: React.FC = () => {
               </div>
             </SectionCard>
 
+            {mayManageBilling ? (
+              <SectionCard
+                className="mb-6"
+                title="Billing & plan"
+                icon={mdiCreditCardOutline}
+              >
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  Compare tiers on the{' '}
+                  <button type="button" onClick={() => navigate('/pricing')} className="text-green-600 dark:text-green-400 font-medium hover:underline">
+                    pricing page
+                  </button>
+                  . Checkout uses Stripe (configure price IDs and webhook in the backend environment).
+                </p>
+                {!billingLoaded ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Loading subscription…</p>
+                ) : !subscriptionSummary ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Subscription details were not returned. Ensure the API exposes GET /api/restaurant with a subscription field.
+                  </p>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-4 text-sm">
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-600 p-4 space-y-1">
+                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Current product</p>
+                      <p className="text-lg font-semibold text-gray-900 dark:text-white capitalize">{subscriptionSummary.plan}</p>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Status: <span className="font-medium">{subscriptionSummary.status}</span>
+                      </p>
+                      <p className="text-gray-600 dark:text-gray-300">
+                        Effective limits: <span className="font-medium capitalize">{subscriptionSummary.effectivePlan}</span>
+                      </p>
+                      {!subscriptionSummary.canPerformWrites ? (
+                        <p className="text-amber-700 dark:text-amber-400 text-xs mt-2">
+                          Dashboard edits are blocked until billing is resolved. Use Manage billing to update your card.
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-xl border border-gray-200 dark:border-gray-600 p-4 space-y-2">
+                      <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Usage limits</p>
+                      <ul className="text-gray-700 dark:text-gray-300 space-y-1">
+                        <li>
+                          Menu items:{' '}
+                          {subscriptionSummary.limits.maxMenuItems == null
+                            ? 'Unlimited'
+                            : `up to ${subscriptionSummary.limits.maxMenuItems}`}
+                        </li>
+                        <li>
+                          Staff seats:{' '}
+                          {subscriptionSummary.limits.maxStaffSeats == null
+                            ? 'Unlimited'
+                            : `up to ${subscriptionSummary.limits.maxStaffSeats}`}
+                        </li>
+                        <li>Reports: up to {subscriptionSummary.limits.maxReportRange === 'custom' ? 'custom dates' : subscriptionSummary.limits.maxReportRange === '30d' ? '30 days' : '7 days'}</li>
+                        <li>Ingredients: {subscriptionSummary.limits.ingredientsFull ? 'full' : 'not available on Free'}</li>
+                        <li>Advanced QR: {subscriptionSummary.limits.qrPremium ? 'included' : 'Basic+ only'}</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={!!checkoutLoading}
+                    onClick={() => startCheckout('basic')}
+                    className="rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+                  >
+                    {checkoutLoading === 'basic' ? 'Redirecting…' : 'Upgrade to Basic'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!!checkoutLoading}
+                    onClick={() => startCheckout('premium')}
+                    className="rounded-xl border border-green-600 text-green-700 dark:text-green-400 px-4 py-2.5 text-sm font-semibold hover:bg-green-50 dark:hover:bg-green-900/20 disabled:opacity-50"
+                  >
+                    {checkoutLoading === 'premium' ? 'Redirecting…' : 'Upgrade to Premium'}
+                  </button>
+                  {subscriptionSummary?.hasStripeCustomer ? (
+                    <button
+                      type="button"
+                      disabled={portalLoading}
+                      onClick={() => openPortal()}
+                      className="rounded-xl border border-gray-300 dark:border-gray-600 px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      {portalLoading ? 'Opening…' : 'Manage billing'}
+                    </button>
+                  ) : null}
+                </div>
+              </SectionCard>
+            ) : null}
+
             {/* Section: Notifications + Security + Danger in one row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
               <section className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
@@ -892,8 +1040,8 @@ const Settings: React.FC = () => {
 const SectionCard: React.FC<{
   title: string;
   icon: string;
-  actionLabel: string;
-  onAction: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
   actionDisabled?: boolean;
   className?: string;
   children: React.ReactNode;
@@ -906,9 +1054,18 @@ const SectionCard: React.FC<{
         </div>
         <h3 className="text-base font-semibold text-gray-800 dark:text-white">{title}</h3>
       </div>
-      <button onClick={onAction} disabled={actionDisabled} className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition">
-        {actionLabel}
-      </button>
+      {actionLabel ? (
+        <button
+          type="button"
+          onClick={onAction}
+          disabled={actionDisabled}
+          className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition"
+        >
+          {actionLabel}
+        </button>
+      ) : (
+        <span className="w-px h-8" aria-hidden />
+      )}
     </div>
     <div className="p-5">{children}</div>
   </section>

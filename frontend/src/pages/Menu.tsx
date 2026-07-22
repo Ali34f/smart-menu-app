@@ -16,7 +16,7 @@ import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
 import { canCreateOrDeleteMenu, canEditMenuItems } from '../utils/permissions';
-import { restaurantService } from '../services/restaurantService';
+import { restaurantService, type SubscriptionSummary } from '../services/restaurantService';
 import {
   getEffectiveMenuCategories,
   mergeCategoriesForDropdown
@@ -100,11 +100,13 @@ const Menu: React.FC = () => {
 
   const [restaurantCuisineType, setRestaurantCuisineType] = useState<string>('Other');
   const [restaurantMenuCategories, setRestaurantMenuCategories] = useState<string[] | null>(null);
+  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary | null>(null);
 
   useEffect(() => {
     const loadRestaurantCuisine = async () => {
       try {
         const r = await restaurantService.getRestaurant();
+        setSubscriptionSummary(r.subscription ?? null);
         setRestaurantCuisineType(r?.cuisineType || 'Other');
         setRestaurantMenuCategories(
           r?.menuCategories && r.menuCategories.length > 0 ? r.menuCategories : null
@@ -125,6 +127,7 @@ const Menu: React.FC = () => {
           setRestaurantMenuCategories(
             r?.menuCategories && r.menuCategories.length > 0 ? r.menuCategories : null
           );
+          setSubscriptionSummary(r.subscription ?? null);
         })
         .catch(() => {});
     };
@@ -137,6 +140,12 @@ const Menu: React.FC = () => {
     const merged = mergeCategoriesForDropdown(restaurantCuisineType, restaurantMenuCategories, extras);
     return ['All Categories', ...merged];
   }, [restaurantCuisineType, restaurantMenuCategories, menuItems]);
+
+  const atMenuItemLimit = useMemo(() => {
+    const max = subscriptionSummary?.limits?.maxMenuItems;
+    if (max == null) return false;
+    return menuItems.length >= max;
+  }, [subscriptionSummary, menuItems]);
   const statuses = ['All Status', 'Active', 'Inactive'];
 
   useEffect(() => {
@@ -675,8 +684,17 @@ const Menu: React.FC = () => {
               </div>
               {allowCreateDelete && (
                 <button 
+                  type="button"
                   onClick={() => navigate('/menu-items/new')}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm"
+                  disabled={atMenuItemLimit}
+                  title={
+                    atMenuItemLimit
+                      ? 'Menu item limit reached for your plan. Open Settings → Billing to upgrade.'
+                      : undefined
+                  }
+                  className={`flex items-center space-x-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition shadow-sm ${
+                    atMenuItemLimit ? 'opacity-50 cursor-not-allowed hover:bg-green-500' : ''
+                  }`}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

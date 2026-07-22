@@ -86,12 +86,35 @@ const restaurantSchema = new mongoose.Schema({
       enum: ['free', 'basic', 'premium'],
       default: 'free'
     },
+    /** Mirrors Stripe lifecycle when billing is enabled; defaults to active for legacy rows. */
+    status: {
+      type: String,
+      enum: ['inactive', 'trialing', 'active', 'past_due', 'canceled'],
+      default: 'active'
+    },
     startDate: {
       type: Date,
       default: Date.now
     },
     endDate: {
       type: Date,
+      default: null
+    },
+    currentPeriodEnd: {
+      type: Date,
+      default: null
+    },
+    /** After a failed payment: writes allowed until this instant (see SUBSCRIPTION_GRACE_DAYS). */
+    gracePeriodEnd: {
+      type: Date,
+      default: null
+    },
+    stripeCustomerId: {
+      type: String,
+      default: null
+    },
+    stripeSubscriptionId: {
+      type: String,
       default: null
     }
   },

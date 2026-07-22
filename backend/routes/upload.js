@@ -3,6 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { protect } = require('../middleware/auth');
+const { requireSubscriptionWrites } = require('../middleware/subscriptionWriteGuard');
 const User = require('../models/Users');
 
 const router = express.Router();
@@ -81,7 +82,7 @@ const profileUpload = multer({
 });
 
 // Upload endpoint
-router.post('/', protect, upload.single('image'), (req, res) => {
+router.post('/', protect, requireSubscriptionWrites, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({

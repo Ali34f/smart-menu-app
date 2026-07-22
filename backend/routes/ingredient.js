@@ -7,6 +7,7 @@ const {
   deleteIngredient
 } = require('../controllers/ingredient_controller');
 const { protect, checkPermission, requireCanEditIngredients } = require('../middleware/auth');
+const { requireSubscriptionWrites } = require('../middleware/subscriptionWriteGuard');
 
 const router = express.Router();
 
@@ -15,12 +16,12 @@ router.use(protect);
 router
   .route('/')
   .get(getIngredients)
-  .post(checkPermission('canManageIngredients'), createIngredient);
+  .post(requireSubscriptionWrites, checkPermission('canManageIngredients'), createIngredient);
 
 router
   .route('/:id')
   .get(getIngredient)
-  .put(requireCanEditIngredients, updateIngredient)
-  .delete(checkPermission('canManageIngredients'), deleteIngredient);
+  .put(requireSubscriptionWrites, requireCanEditIngredients, updateIngredient)
+  .delete(requireSubscriptionWrites, checkPermission('canManageIngredients'), deleteIngredient);
 
 module.exports = router;

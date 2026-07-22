@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { authService } from '../services/authService';
-import { staffService, type RestaurantTeamRole } from '../services/staffService';
+import { staffService, type RestaurantTeamRole, type StaffMemberRecord } from '../services/staffService';
 import ProfileDropdown from '../components/ProfileDropdown';
 import DeleteConfirmationModal from '../components/DeleteConfirmationModal';
 import Toast from '../components/Toast';
@@ -15,21 +15,45 @@ import NotificationBell from '../components/NotificationBell';
 import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
+import {
+  JOB_ROLE_OTHER,
+  RESTAURANT_JOB_ROLE_GROUPS,
+  parseJobTitleForForm,
+  resolvedJobTitleForApi
+} from '../constants/restaurantJobRoles';
 
-interface StaffMember {
-  _id: string;
-  name: string;
-  email: string;
-  role: 'owner' | 'manager' | 'staff';
-  isActive: boolean;
-  lastLogin?: string;
-  profilePicture?: string;
-  createdAt?: string;
-  restaurantId?: {
-    _id: string;
-    name: string;
-  } | string;
-}
+const GENDER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'female', label: 'Female' },
+  { value: 'male', label: 'Male' },
+  { value: 'non_binary', label: 'Non-binary' },
+  { value: 'prefer_not_say', label: 'Prefer not to say' },
+  { value: 'other', label: 'Other' }
+];
+
+const CONTRACT_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Not set' },
+  { value: 'full_time', label: 'Full-time' },
+  { value: 'part_time', label: 'Part-time' },
+  { value: 'zero_hours', label: 'Zero-hours' },
+  { value: 'fixed_term', label: 'Fixed-term / temporary' },
+  { value: 'casual', label: 'Casual' },
+  { value: 'apprenticeship', label: 'Apprenticeship' }
+];
+
+const PAYMENT_FREQUENCY_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Not set' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'four_weekly', label: 'Four-weekly' }
+];
+
+const fieldInputClass =
+  'w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60';
+const fieldInputClassInvite =
+  'w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500';
+
+type StaffMember = StaffMemberRecord;
 
 type ColumnKey = 'member' | 'email' | 'restaurant' | 'role' | 'status' | 'lastLogin' | 'actions';
 
@@ -43,11 +67,13 @@ const Staff: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileEditMode, setProfileEditMode] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSaveLoading, setProfileSaveLoading] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [editLoading, setEditLoading] = useState(false);
   const [pendingInvitations, setPendingInvitations] = useState(0);
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>({
     member: 220,
@@ -62,11 +88,34 @@ const Staff: React.FC = () => {
   const [startX, setStartX] = useState(0);
   const [startWidth, setStartWidth] = useState(0);
 
-  const [editForm, setEditForm] = useState({
+  const [profileForm, setProfileForm] = useState({
     name: '',
     email: '',
     role: 'staff' as RestaurantTeamRole,
-    isActive: true
+    isActive: true,
+    age: '' as string | number,
+    gender: '' as string,
+    jobRoleSelect: '',
+    jobRoleCustom: '',
+    hourlyRate: '' as string | number,
+    phone: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    startDate: '',
+    notesInternal: '',
+    contractType: '',
+    paymentFrequency: '',
+    hoursPerWeek: '' as string | number,
+    niNumber: '',
+    taxCode: '',
+    addressLine1: '',
+    addressLine2: '',
+    townCity: '',
+    county: '',
+    postcode: '',
+    bankAccountHolderName: '',
+    bankSortCode: '',
+    bankAccountNumber: ''
   });
 
   const userEmail = localStorage.getItem('userEmail') || '';
@@ -113,7 +162,30 @@ const Staff: React.FC = () => {
     name: '',
     email: '',
     password: '',
-    role: 'staff' as RestaurantTeamRole
+    role: 'staff' as RestaurantTeamRole,
+    age: '' as string | number,
+    gender: '' as string,
+    jobRoleSelect: '',
+    jobRoleCustom: '',
+    hourlyRate: '' as string | number,
+    phone: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    startDate: '',
+    notesInternal: '',
+    contractType: '',
+    paymentFrequency: '',
+    hoursPerWeek: '' as string | number,
+    niNumber: '',
+    taxCode: '',
+    addressLine1: '',
+    addressLine2: '',
+    townCity: '',
+    county: '',
+    postcode: '',
+    bankAccountHolderName: '',
+    bankSortCode: '',
+    bankAccountNumber: ''
   });
 
   useEffect(() => {
@@ -168,6 +240,44 @@ const Staff: React.FC = () => {
     };
   }, [resizingColumn, startWidth, startX]);
 
+  const requiresInviteHr = inviteForm.role === 'staff' || inviteForm.role === 'manager';
+
+  const syncProfileFormFromMember = (m: StaffMemberRecord) => {
+    const sp = m.staffProfile || {};
+    const start =
+      sp.startDate != null ? String(sp.startDate).slice(0, 10) : '';
+    const { selectValue, customTitle } = parseJobTitleForForm(sp.jobTitle);
+    setProfileForm({
+      name: m.name || '',
+      email: m.email || '',
+      role: (m.role as RestaurantTeamRole) || 'staff',
+      isActive: m.isActive !== false,
+      age: sp.age != null ? sp.age : '',
+      gender: sp.gender != null ? String(sp.gender) : '',
+      jobRoleSelect: selectValue,
+      jobRoleCustom: customTitle,
+      hourlyRate: sp.hourlyRate != null ? sp.hourlyRate : '',
+      phone: sp.phone != null ? String(sp.phone) : '',
+      emergencyContactName: sp.emergencyContactName != null ? String(sp.emergencyContactName) : '',
+      emergencyContactPhone: sp.emergencyContactPhone != null ? String(sp.emergencyContactPhone) : '',
+      startDate: start,
+      notesInternal: sp.notesInternal != null ? String(sp.notesInternal) : '',
+      contractType: sp.contractType != null ? String(sp.contractType) : '',
+      paymentFrequency: sp.paymentFrequency != null ? String(sp.paymentFrequency) : '',
+      hoursPerWeek: sp.hoursPerWeek != null ? sp.hoursPerWeek : '',
+      niNumber: sp.niNumber != null ? String(sp.niNumber) : '',
+      taxCode: sp.taxCode != null ? String(sp.taxCode) : '',
+      addressLine1: sp.addressLine1 != null ? String(sp.addressLine1) : '',
+      addressLine2: sp.addressLine2 != null ? String(sp.addressLine2) : '',
+      townCity: sp.townCity != null ? String(sp.townCity) : '',
+      county: sp.county != null ? String(sp.county) : '',
+      postcode: sp.postcode != null ? String(sp.postcode) : '',
+      bankAccountHolderName: sp.bankAccountHolderName != null ? String(sp.bankAccountHolderName) : '',
+      bankSortCode: sp.bankSortCode != null ? String(sp.bankSortCode) : '',
+      bankAccountNumber: sp.bankAccountNumber != null ? String(sp.bankAccountNumber) : ''
+    });
+  };
+
   const fetchStaffMembers = async () => {
     try {
       setLoading(true);
@@ -203,18 +313,257 @@ const Staff: React.FC = () => {
       return;
     }
 
+    if (requiresInviteHr) {
+      const ageNum = Number(inviteForm.age);
+      if (!Number.isFinite(ageNum) || ageNum < 16 || ageNum > 100) {
+        showError('Enter a valid age between 16 and 100');
+        return;
+      }
+      if (!inviteForm.gender) {
+        showError('Please select a gender');
+        return;
+      }
+      const inviteTitle = resolvedJobTitleForApi(
+        inviteForm.jobRoleSelect,
+        inviteForm.jobRoleCustom
+      ).trim().slice(0, 80);
+      if (!inviteTitle) {
+        showError('Choose a restaurant job role from the list, or pick Other and type a custom title');
+        return;
+      }
+      if (inviteForm.jobRoleSelect === JOB_ROLE_OTHER && !inviteForm.jobRoleCustom.trim()) {
+        showError('Enter a custom job role, or choose a preset from the list instead of Other');
+        return;
+      }
+      const rate = Number(inviteForm.hourlyRate);
+      if (!Number.isFinite(rate) || rate < 0) {
+        showError('Enter a valid hourly rate in GBP');
+        return;
+      }
+      const hwInvite = inviteForm.hoursPerWeek;
+      if (hwInvite !== '' && hwInvite != null) {
+        const hwn = Number(hwInvite);
+        if (!Number.isFinite(hwn) || hwn < 0 || hwn > 168) {
+          showError('Hours per week must be between 0 and 168');
+          return;
+        }
+      }
+    }
+
     try {
       setInviteLoading(true);
-      await staffService.addStaff(inviteForm);
+      const payload: Parameters<typeof staffService.addStaff>[0] = {
+        name: inviteForm.name.trim(),
+        email: inviteForm.email.trim(),
+        password: inviteForm.password,
+        role: inviteForm.role
+      };
+      if (requiresInviteHr) {
+        payload.age = Number(inviteForm.age);
+        payload.gender = inviteForm.gender;
+        payload.jobTitle = resolvedJobTitleForApi(
+          inviteForm.jobRoleSelect,
+          inviteForm.jobRoleCustom
+        ).trim().slice(0, 80);
+        payload.hourlyRate = Number(inviteForm.hourlyRate);
+        payload.phone = inviteForm.phone.trim() || undefined;
+        payload.emergencyContactName = inviteForm.emergencyContactName.trim() || undefined;
+        payload.emergencyContactPhone = inviteForm.emergencyContactPhone.trim() || undefined;
+        payload.startDate = inviteForm.startDate || undefined;
+        payload.notesInternal = inviteForm.notesInternal.trim() || undefined;
+        if (inviteForm.contractType) payload.contractType = inviteForm.contractType;
+        if (inviteForm.paymentFrequency) payload.paymentFrequency = inviteForm.paymentFrequency;
+        const hwnum = inviteForm.hoursPerWeek;
+        if (hwnum !== '' && hwnum != null) payload.hoursPerWeek = Number(hwnum);
+        if (inviteForm.niNumber.trim()) payload.niNumber = inviteForm.niNumber.trim();
+        if (inviteForm.taxCode.trim()) payload.taxCode = inviteForm.taxCode.trim();
+        if (inviteForm.addressLine1.trim()) payload.addressLine1 = inviteForm.addressLine1.trim();
+        if (inviteForm.addressLine2.trim()) payload.addressLine2 = inviteForm.addressLine2.trim();
+        if (inviteForm.townCity.trim()) payload.townCity = inviteForm.townCity.trim();
+        if (inviteForm.county.trim()) payload.county = inviteForm.county.trim();
+        if (inviteForm.postcode.trim()) payload.postcode = inviteForm.postcode.trim();
+        if (inviteForm.bankAccountHolderName.trim()) {
+          payload.bankAccountHolderName = inviteForm.bankAccountHolderName.trim();
+        }
+        if (inviteForm.bankSortCode.trim()) payload.bankSortCode = inviteForm.bankSortCode.trim();
+        if (inviteForm.bankAccountNumber.trim()) {
+          payload.bankAccountNumber = inviteForm.bankAccountNumber.replace(/\s/g, '');
+        }
+      }
+      await staffService.addStaff(payload);
       toast.success('Staff member invited successfully');
       setIsInviteModalOpen(false);
-      setInviteForm({ name: '', email: '', password: '', role: 'staff' });
+      setInviteForm({
+        name: '',
+        email: '',
+        password: '',
+        role: 'staff',
+        age: '',
+        gender: '',
+        jobRoleSelect: '',
+        jobRoleCustom: '',
+        hourlyRate: '',
+        phone: '',
+        emergencyContactName: '',
+        emergencyContactPhone: '',
+        startDate: '',
+        notesInternal: '',
+        contractType: '',
+        paymentFrequency: '',
+        hoursPerWeek: '',
+        niNumber: '',
+        taxCode: '',
+        addressLine1: '',
+        addressLine2: '',
+        townCity: '',
+        county: '',
+        postcode: '',
+        bankAccountHolderName: '',
+        bankSortCode: '',
+        bankAccountNumber: ''
+      });
       fetchStaffMembers();
     } catch (error: any) {
       console.error('Error inviting staff:', error);
       showError(error.response?.data?.message || 'Failed to invite staff member');
     } finally {
       setInviteLoading(false);
+    }
+  };
+
+  const openStaffProfile = async (staff: StaffMember) => {
+    if (!canManageStaff) return;
+    if (staff.role === 'owner' && !isPlatformAdmin) {
+      showError('Only a platform admin can view or edit owner account details');
+      return;
+    }
+    setSelectedStaff(staff);
+    setIsProfileModalOpen(true);
+    setProfileEditMode(false);
+    setProfileLoading(true);
+    try {
+      const res = await staffService.getStaffMember(staff._id);
+      if (res.data) {
+        setSelectedStaff(res.data);
+        syncProfileFormFromMember(res.data);
+      }
+    } catch (error: unknown) {
+      console.error(error);
+      const err = error as { response?: { data?: { message?: string } } };
+      showError(err.response?.data?.message || 'Could not load staff profile');
+      setIsProfileModalOpen(false);
+      setSelectedStaff(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleProfileSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff) return;
+
+    try {
+      setProfileSaveLoading(true);
+      const ageNum = Number(profileForm.age);
+      const rateNum = Number(profileForm.hourlyRate);
+      if (!Number.isFinite(ageNum) || ageNum < 16 || ageNum > 100) {
+        showError('Age must be between 16 and 100');
+        setProfileSaveLoading(false);
+        return;
+      }
+      if (!profileForm.gender) {
+        showError('Please select a gender');
+        setProfileSaveLoading(false);
+        return;
+      }
+      const profileJobTitle = resolvedJobTitleForApi(
+        profileForm.jobRoleSelect,
+        profileForm.jobRoleCustom
+      ).trim().slice(0, 80);
+      if (!profileJobTitle) {
+        showError('Job role at the restaurant is required');
+        setProfileSaveLoading(false);
+        return;
+      }
+      if (profileForm.jobRoleSelect === JOB_ROLE_OTHER && !profileForm.jobRoleCustom.trim()) {
+        showError('Enter a custom job role, or choose a preset from the list');
+        setProfileSaveLoading(false);
+        return;
+      }
+      if (!Number.isFinite(rateNum) || rateNum < 0) {
+        showError('Hourly rate must be a valid non-negative number');
+        setProfileSaveLoading(false);
+        return;
+      }
+
+      const hpwEmpty = profileForm.hoursPerWeek === '' || profileForm.hoursPerWeek == null;
+      if (!hpwEmpty) {
+        const hw = Number(profileForm.hoursPerWeek);
+        if (!Number.isFinite(hw) || hw < 0 || hw > 168) {
+          showError('Hours per week must be between 0 and 168');
+          setProfileSaveLoading(false);
+          return;
+        }
+      }
+
+      const basePayload =
+        selectedStaff.role === 'owner'
+          ? {
+              name: profileForm.name.trim(),
+              email: profileForm.email.trim(),
+              isActive: profileForm.isActive
+            }
+          : {
+              name: profileForm.name.trim(),
+              email: profileForm.email.trim(),
+              role: profileForm.role,
+              isActive: profileForm.isActive
+            };
+
+      await staffService.updateStaff(selectedStaff._id, {
+        ...basePayload,
+        staffProfile: {
+          age: ageNum,
+          gender: profileForm.gender,
+          jobTitle: profileJobTitle,
+          hourlyRate: rateNum,
+          phone: profileForm.phone.trim() || null,
+          emergencyContactName: profileForm.emergencyContactName.trim() || null,
+          emergencyContactPhone: profileForm.emergencyContactPhone.trim() || null,
+          startDate: profileForm.startDate || null,
+          notesInternal: profileForm.notesInternal.trim() || null,
+          contractType: profileForm.contractType.trim() || null,
+          paymentFrequency: profileForm.paymentFrequency.trim() || null,
+          hoursPerWeek:
+            profileForm.hoursPerWeek === '' || profileForm.hoursPerWeek == null
+              ? null
+              : Number(profileForm.hoursPerWeek),
+          niNumber: profileForm.niNumber.trim() || null,
+          taxCode: profileForm.taxCode.trim() || null,
+          addressLine1: profileForm.addressLine1.trim() || null,
+          addressLine2: profileForm.addressLine2.trim() || null,
+          townCity: profileForm.townCity.trim() || null,
+          county: profileForm.county.trim() || null,
+          postcode: profileForm.postcode.trim() || null,
+          bankAccountHolderName: profileForm.bankAccountHolderName.trim() || null,
+          bankSortCode: profileForm.bankSortCode.trim().replace(/\D/g, '') || null,
+          bankAccountNumber: profileForm.bankAccountNumber.trim().replace(/\s/g, '') || null
+        }
+      });
+      toast.success('Profile updated');
+      setProfileEditMode(false);
+      fetchStaffMembers();
+      const refreshed = await staffService.getStaffMember(selectedStaff._id);
+      if (refreshed.data) {
+        setSelectedStaff(refreshed.data);
+        syncProfileFormFromMember(refreshed.data);
+      }
+    } catch (error: unknown) {
+      console.error(error);
+      const err = error as { response?: { data?: { message?: string } } };
+      showError(err.response?.data?.message || 'Failed to save profile');
+    } finally {
+      setProfileSaveLoading(false);
     }
   };
 
@@ -236,44 +585,6 @@ const Staff: React.FC = () => {
     }
   };
 
-  const handleEditStaff = (staff: StaffMember) => {
-    if (staff.role === 'owner' && !isPlatformAdmin) {
-      showError('Only a platform admin can edit an owner account');
-      return;
-    }
-    setSelectedStaff(staff);
-    setEditForm({
-      name: staff.name,
-      email: staff.email,
-      role: staff.role === 'manager' ? 'manager' : staff.role === 'owner' ? 'owner' : 'staff',
-      isActive: staff.isActive
-    });
-    setIsEditModalOpen(true);
-  };
-
-  const handleUpdateStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStaff) return;
-
-    try {
-      setEditLoading(true);
-      const payload =
-        selectedStaff.role === 'owner'
-          ? { name: editForm.name, email: editForm.email, isActive: editForm.isActive }
-          : { name: editForm.name, email: editForm.email, role: editForm.role, isActive: editForm.isActive };
-      await staffService.updateStaff(selectedStaff._id, payload);
-      toast.success('Staff member updated successfully');
-      setIsEditModalOpen(false);
-      setSelectedStaff(null);
-      fetchStaffMembers();
-    } catch (error: any) {
-      console.error('Error updating staff:', error);
-      showError(error.response?.data?.message || 'Failed to update staff member');
-    } finally {
-      setEditLoading(false);
-    }
-  };
-
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'owner':
@@ -287,9 +598,9 @@ const Staff: React.FC = () => {
     }
   };
 
-  const formatLastLogin = (lastLogin?: string) => {
+  const formatLastLogin = (lastLogin?: string | null) => {
     if (!lastLogin) return 'Never';
-    
+
     const date = new Date(lastLogin);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
@@ -675,7 +986,21 @@ const Staff: React.FC = () => {
                                         {staff.name.charAt(0).toUpperCase()}
                                       </div>
                                     )}
-                                    <span className="font-medium text-gray-800 dark:text-white truncate">{staff.name}</span>
+                                    {canManageStaff ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openStaffProfile(staff)}
+                                        className={`font-medium text-gray-800 dark:text-white truncate text-left hover:text-green-600 dark:hover:text-green-400 hover:underline ${
+                                          staff.role === 'owner' && !isPlatformAdmin ? 'cursor-not-allowed opacity-60' : ''
+                                        }`}
+                                        disabled={staff.role === 'owner' && !isPlatformAdmin}
+                                        title="View employment profile"
+                                      >
+                                        {staff.name}
+                                      </button>
+                                    ) : (
+                                      <span className="font-medium text-gray-800 dark:text-white truncate">{staff.name}</span>
+                                    )}
                                   </div>
                                 </td>
                                 <td className="py-4 px-4 text-gray-600 dark:text-gray-400 text-sm truncate">{staff.email}</td>
@@ -704,9 +1029,10 @@ const Staff: React.FC = () => {
                                   <td className="py-4 px-4">
                                     <div className="flex items-center space-x-2">
                                       <button
-                                        onClick={() => handleEditStaff(staff)}
+                                        type="button"
+                                        onClick={() => openStaffProfile(staff)}
                                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400"
-                                        title="Edit"
+                                        title="Open profile"
                                         disabled={staff.role === 'owner' && !isPlatformAdmin}
                                       >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -823,11 +1149,25 @@ const Staff: React.FC = () => {
                         </span>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Can view menu and update item availability
+                        Can view menu and update item availability. Team-only users do not see payroll or HR fields; only owners, managers, and platform admins can enter and edit employment details.
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {canManageStaff && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border border-gray-100 dark:border-gray-700">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white mb-3">HR beyond this screen</h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                      Contracts, NI, bank details, hours, and tax codes can be captured in each team member profile (visible only to
+                      owners, managers, and platform admins). For full compliance you may still need{' '}
+                      <strong className="text-gray-800 dark:text-gray-200">right-to-work evidence</strong>,{' '}
+                      <strong>pension opt-out / enrolment</strong>, <strong>holiday accrual from your payroll software</strong>, and{' '}
+                      <strong>training or food-hygiene certificates</strong>. Use internal notes for renewal dates, or attach documents
+                      in your payroll or HR system — this app does not store uploads.
+                    </p>
+                  </div>
+                )}
               </div>
             </motion.div>
             </> )}
@@ -839,9 +1179,12 @@ const Staff: React.FC = () => {
       {isInviteModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm" onClick={() => setIsInviteModalOpen(false)}></div>
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-lg w-full transform transition-all" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6">
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div
+              className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-700 max-w-5xl xl:max-w-6xl w-full transform transition-all max-h-[93vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 sm:p-8">
                 <div className="flex items-start justify-between mb-5">
                   <div>
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Invite Team Member</h3>
@@ -921,6 +1264,385 @@ const Staff: React.FC = () => {
                     </p>
                   </div>
 
+                  {(inviteForm.role === 'staff' || inviteForm.role === 'manager') && (
+                    <>
+                      <div className="border-t border-gray-200 dark:border-gray-600 pt-5 mt-2">
+                        <h4 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Employment details</h4>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                          Required for managers and staff. The assigned restaurant is the workspace you have open now.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Age</label>
+                            <input
+                              type="number"
+                              min={16}
+                              max={100}
+                              value={inviteForm.age}
+                              onChange={(e) => setInviteForm({ ...inviteForm, age: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              placeholder="e.g. 22"
+                              required={inviteForm.role === 'staff' || inviteForm.role === 'manager'}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Gender</label>
+                            <select
+                              value={inviteForm.gender}
+                              onChange={(e) => setInviteForm({ ...inviteForm, gender: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              required={inviteForm.role === 'staff' || inviteForm.role === 'manager'}
+                            >
+                              <option value="">Select…</option>
+                              {GENDER_OPTIONS.map((g) => (
+                                <option key={g.value || 'x'} value={g.value || ''}>
+                                  {g.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Job role at restaurant
+                            </label>
+                            <select
+                              value={inviteForm.jobRoleSelect}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setInviteForm((f) => ({
+                                  ...f,
+                                  jobRoleSelect: v,
+                                  jobRoleCustom: v === JOB_ROLE_OTHER ? f.jobRoleCustom : ''
+                                }));
+                              }}
+                              className={fieldInputClassInvite}
+                              required={inviteForm.role === 'staff' || inviteForm.role === 'manager'}
+                            >
+                              <option value="">Select job role…</option>
+                              {RESTAURANT_JOB_ROLE_GROUPS.map((grp) => (
+                                <optgroup key={grp.group} label={grp.group}>
+                                  {grp.roles.map((roleLabel) => (
+                                    <option key={`${grp.group}-${roleLabel}`} value={roleLabel}>
+                                      {roleLabel}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                              <option value={JOB_ROLE_OTHER}>Other (specify)</option>
+                            </select>
+                            {inviteForm.jobRoleSelect === JOB_ROLE_OTHER && (
+                              <input
+                                type="text"
+                                value={inviteForm.jobRoleCustom}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, jobRoleCustom: e.target.value })
+                                }
+                                className={`${fieldInputClassInvite} mt-2`}
+                                placeholder="Custom job title"
+                                maxLength={80}
+                                required={
+                                  inviteForm.role === 'staff' || inviteForm.role === 'manager'
+                                }
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Hourly pay (GBP)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={inviteForm.hourlyRate}
+                              onChange={(e) => setInviteForm({ ...inviteForm, hourlyRate: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              placeholder="e.g. 12.50"
+                              required={inviteForm.role === 'staff' || inviteForm.role === 'manager'}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Work phone (optional)
+                            </label>
+                            <input
+                              type="text"
+                              value={inviteForm.phone}
+                              onChange={(e) => setInviteForm({ ...inviteForm, phone: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                              placeholder="Mobile for shift contact"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Emergency contact name
+                            </label>
+                            <input
+                              type="text"
+                              value={inviteForm.emergencyContactName}
+                              onChange={(e) =>
+                                setInviteForm({ ...inviteForm, emergencyContactName: e.target.value })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Emergency contact phone
+                            </label>
+                            <input
+                              type="text"
+                              value={inviteForm.emergencyContactPhone}
+                              onChange={(e) =>
+                                setInviteForm({ ...inviteForm, emergencyContactPhone: e.target.value })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Start date (optional)
+                            </label>
+                            <input
+                              type="date"
+                              value={inviteForm.startDate}
+                              onChange={(e) => setInviteForm({ ...inviteForm, startDate: e.target.value })}
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                              Internal notes (optional)
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={inviteForm.notesInternal}
+                              onChange={(e) =>
+                                setInviteForm({ ...inviteForm, notesInternal: e.target.value })
+                              }
+                              className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+                              placeholder="Visa check due, training, uniform size…"
+                              maxLength={500}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-600 pt-5 mt-5">
+                          <h5 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">
+                            Contract & payroll (optional)
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Employment type
+                              </label>
+                              <select
+                                value={inviteForm.contractType}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, contractType: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              >
+                                {CONTRACT_TYPE_OPTIONS.map((o) => (
+                                  <option key={o.value || 'x'} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Pay frequency
+                              </label>
+                              <select
+                                value={inviteForm.paymentFrequency}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, paymentFrequency: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              >
+                                {PAYMENT_FREQUENCY_OPTIONS.map((o) => (
+                                  <option key={o.value || 'x'} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Contract hours / week (optional)
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={168}
+                                step="0.25"
+                                value={inviteForm.hoursPerWeek}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, hoursPerWeek: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                National Insurance no. (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.niNumber}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, niNumber: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Tax code (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.taxCode}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, taxCode: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                                placeholder="e.g. 1257L"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-600 pt-5 mt-5">
+                          <h5 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">
+                            Home address (optional)
+                          </h5>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Address line 1
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.addressLine1}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, addressLine1: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Address line 2
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.addressLine2}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, addressLine2: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Town / city
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.townCity}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, townCity: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                County
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.county}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, county: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Postcode
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.postcode}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, postcode: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="border-t border-gray-200 dark:border-gray-600 pt-5 mt-5">
+                          <h5 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">
+                            Bank payments (optional)
+                          </h5>
+                          <p className="text-xs text-amber-800 dark:text-amber-200/90 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-3">
+                            Bank details are sensitive. Restrict database and admin access — consider encryption at rest for
+                            production.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Account holder name
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.bankAccountHolderName}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, bankAccountHolderName: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Sort code (6 digits)
+                              </label>
+                              <input
+                                type="text"
+                                value={inviteForm.bankSortCode}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, bankSortCode: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                                placeholder="12-34-56"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                Account number
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={inviteForm.bankAccountNumber}
+                                onChange={(e) =>
+                                  setInviteForm({ ...inviteForm, bankAccountNumber: e.target.value })
+                                }
+                                className={fieldInputClassInvite}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   <div className="rounded-lg border border-green-100 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-3 py-2.5">
                     <p className="text-xs font-medium text-green-700 dark:text-green-300">
                       {isPlatformAdmin
@@ -962,21 +1684,38 @@ const Staff: React.FC = () => {
         </div>
       )}
 
-      {/* Edit Staff Modal */}
-      {isEditModalOpen && selectedStaff && (
+      {/* Staff profile modal (managers / owners / platform admins only) */}
+      {isProfileModalOpen && selectedStaff && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm" onClick={() => setIsEditModalOpen(false)}></div>
-          <div className="flex min-h-full items-center justify-center p-4">
-            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full transform transition-all" onClick={(e) => e.stopPropagation()}>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Edit Staff Member</h3>
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 transition-opacity backdrop-blur-sm"
+            onClick={() => {
+              setIsProfileModalOpen(false);
+              setSelectedStaff(null);
+              setProfileEditMode(false);
+            }}
+          />
+          <div className="flex min-h-full items-center justify-center p-4 sm:p-6">
+            <div
+              className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-5xl xl:max-w-6xl w-full max-h-[92vh] overflow-y-auto transform transition-all border border-gray-100 dark:border-gray-700"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 sm:p-8">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Team member profile</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Account and employment details. Only owners, managers, and platform admins can edit.
+                    </p>
+                  </div>
                   <button
+                    type="button"
                     onClick={() => {
-                      setIsEditModalOpen(false);
+                      setIsProfileModalOpen(false);
                       setSelectedStaff(null);
+                      setProfileEditMode(false);
                     }}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition"
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition shrink-0"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -984,91 +1723,506 @@ const Staff: React.FC = () => {
                   </button>
                 </div>
 
-                <form onSubmit={handleUpdateStaff} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
-                    <input
-                      type="text"
-                      value={editForm.name}
-                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      required
-                    />
+                {profileLoading ? (
+                  <div className="flex justify-center py-16">
+                    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600" />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email</label>
-                    <input
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Role</label>
-                    {selectedStaff.role === 'owner' ? (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 py-2">
-                        {formatRoleLabel('owner')} — role cannot be changed here.
-                      </p>
-                    ) : (
-                      <select
-                        value={editForm.role}
-                        onChange={(e) =>
-                          setEditForm({ ...editForm, role: e.target.value as RestaurantTeamRole })
-                        }
-                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center gap-3 mb-6">
+                      <button
+                        type="button"
+                        onClick={() => setProfileEditMode(true)}
+                        disabled={profileEditMode}
+                        className="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                       >
-                        {rolesAssignableOnEdit(selectedStaff).map((r) => (
-                          <option key={r} value={r}>
-                            {formatRoleLabel(r)}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="isActive"
-                      checked={editForm.isActive}
-                      onChange={(e) => setEditForm({ ...editForm, isActive: e.target.checked })}
-                      className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                    />
-                    <label htmlFor="isActive" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Active
-                    </label>
-                  </div>
-                  <div className="flex items-center justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsEditModalOpen(false);
-                        setSelectedStaff(null);
-                      }}
-                      className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={editLoading}
-                      className="px-6 py-2.5 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 focus:ring-4 focus:ring-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-green-500/30 flex items-center space-x-2"
-                    >
-                      {editLoading ? (
-                        <>
-                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span>Updating...</span>
-                        </>
-                      ) : (
-                        <span>Update Staff</span>
+                        Edit
+                      </button>
+                      {profileEditMode && selectedStaff && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            syncProfileFormFromMember(selectedStaff);
+                            setProfileEditMode(false);
+                          }}
+                          className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200"
+                        >
+                          Discard changes
+                        </button>
                       )}
-                    </button>
-                  </div>
-                </form>
+                    </div>
+
+                    <form onSubmit={handleProfileSave} className="space-y-5">
+                      <div className="rounded-xl border border-gray-200 dark:border-gray-600 p-4 space-y-3">
+                        <h4 className="text-sm font-semibold text-gray-800 dark:text-white">Restaurant</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          {typeof selectedStaff.restaurantId === 'object' &&
+                          selectedStaff.restaurantId &&
+                          'name' in selectedStaff.restaurantId
+                            ? selectedStaff.restaurantId.name
+                            : restaurantName}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full name</label>
+                          <input
+                            type="text"
+                            value={profileForm.name}
+                            onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                            disabled={!profileEditMode}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            required
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label>
+                          <input
+                            type="email"
+                            value={profileForm.email}
+                            onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                            disabled={!profileEditMode}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Dashboard permission
+                          </label>
+                          {selectedStaff.role === 'owner' ? (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 py-2">
+                              Owner — role cannot be changed here.
+                            </p>
+                          ) : (
+                            <select
+                              value={profileForm.role}
+                              onChange={(e) =>
+                                setProfileForm({ ...profileForm, role: e.target.value as RestaurantTeamRole })
+                              }
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            >
+                              {rolesAssignableOnEdit(selectedStaff).map((r) => (
+                                <option key={r} value={r}>
+                                  {formatRoleLabel(r)}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                        <div className="flex items-center pt-6">
+                          <input
+                            type="checkbox"
+                            id="profileActive"
+                            checked={profileForm.isActive}
+                            onChange={(e) => setProfileForm({ ...profileForm, isActive: e.target.checked })}
+                            disabled={!profileEditMode}
+                            className="w-4 h-4 text-green-600 border-gray-300 rounded"
+                          />
+                          <label htmlFor="profileActive" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Account active
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-gray-200 dark:border-gray-600 pt-5">
+                        <h4 className="text-sm font-semibold text-gray-800 dark:text-white mb-3">Employment & contact</h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Age</label>
+                            <input
+                              type="number"
+                              min={16}
+                              max={100}
+                              value={profileForm.age}
+                              onChange={(e) => setProfileForm({ ...profileForm, age: e.target.value })}
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Gender</label>
+                            <select
+                              value={profileForm.gender}
+                              onChange={(e) => setProfileForm({ ...profileForm, gender: e.target.value })}
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            >
+                              <option value="">Select…</option>
+                              {GENDER_OPTIONS.map((g) => (
+                                <option key={g.value} value={g.value}>
+                                  {g.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Job role at restaurant
+                            </label>
+                            <select
+                              value={profileForm.jobRoleSelect}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setProfileForm((f) => ({
+                                  ...f,
+                                  jobRoleSelect: v,
+                                  jobRoleCustom: v === JOB_ROLE_OTHER ? f.jobRoleCustom : ''
+                                }));
+                              }}
+                              disabled={!profileEditMode}
+                              className={fieldInputClass}
+                            >
+                              <option value="">Select job role…</option>
+                              {RESTAURANT_JOB_ROLE_GROUPS.map((grp) => (
+                                <optgroup key={grp.group} label={grp.group}>
+                                  {grp.roles.map((roleLabel) => (
+                                    <option key={`${grp.group}-${roleLabel}`} value={roleLabel}>
+                                      {roleLabel}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              ))}
+                              <option value={JOB_ROLE_OTHER}>Other (specify)</option>
+                            </select>
+                            {profileForm.jobRoleSelect === JOB_ROLE_OTHER && (
+                              <input
+                                type="text"
+                                value={profileForm.jobRoleCustom}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, jobRoleCustom: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={`${fieldInputClass} mt-2`}
+                                placeholder="Custom job title"
+                                maxLength={80}
+                              />
+                            )}
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Hourly pay (GBP)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min={0}
+                              value={profileForm.hourlyRate}
+                              onChange={(e) => setProfileForm({ ...profileForm, hourlyRate: e.target.value })}
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Work phone
+                            </label>
+                            <input
+                              type="text"
+                              value={profileForm.phone}
+                              onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Emergency contact name
+                            </label>
+                            <input
+                              type="text"
+                              value={profileForm.emergencyContactName}
+                              onChange={(e) =>
+                                setProfileForm({ ...profileForm, emergencyContactName: e.target.value })
+                              }
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Emergency contact phone
+                            </label>
+                            <input
+                              type="text"
+                              value={profileForm.emergencyContactPhone}
+                              onChange={(e) =>
+                                setProfileForm({ ...profileForm, emergencyContactPhone: e.target.value })
+                              }
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Start date
+                            </label>
+                            <input
+                              type="date"
+                              value={profileForm.startDate}
+                              onChange={(e) => setProfileForm({ ...profileForm, startDate: e.target.value })}
+                              disabled={!profileEditMode}
+                              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-60"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Internal notes
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={profileForm.notesInternal}
+                              onChange={(e) =>
+                                setProfileForm({ ...profileForm, notesInternal: e.target.value })
+                              }
+                              disabled={!profileEditMode}
+                              className={`${fieldInputClass} text-sm`}
+                              maxLength={500}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8 pt-6 border-t border-gray-200 dark:border-gray-600">
+                          <div className="space-y-4">
+                            <h5 className="text-sm font-semibold text-gray-800 dark:text-white">
+                              Contract & payroll
+                            </h5>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Employment type
+                              </label>
+                              <select
+                                value={profileForm.contractType}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, contractType: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              >
+                                {CONTRACT_TYPE_OPTIONS.map((o) => (
+                                  <option key={o.value || 'y'} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Pay frequency
+                              </label>
+                              <select
+                                value={profileForm.paymentFrequency}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, paymentFrequency: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              >
+                                {PAYMENT_FREQUENCY_OPTIONS.map((o) => (
+                                  <option key={o.value || 'y'} value={o.value}>
+                                    {o.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Contract hours / week
+                              </label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={168}
+                                step="0.25"
+                                value={profileForm.hoursPerWeek}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, hoursPerWeek: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                National Insurance number
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.niNumber}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, niNumber: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Tax code (PAYE)
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.taxCode}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, taxCode: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                          </div>
+                          <div className="space-y-4">
+                            <h5 className="text-sm font-semibold text-gray-800 dark:text-white">
+                              Home address
+                            </h5>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Address line 1
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.addressLine1}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, addressLine1: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Address line 2
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.addressLine2}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, addressLine2: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  Town / city
+                                </label>
+                                <input
+                                  type="text"
+                                  value={profileForm.townCity}
+                                  onChange={(e) =>
+                                    setProfileForm({ ...profileForm, townCity: e.target.value })
+                                  }
+                                  disabled={!profileEditMode}
+                                  className={fieldInputClass}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                  County
+                                </label>
+                                <input
+                                  type="text"
+                                  value={profileForm.county}
+                                  onChange={(e) =>
+                                    setProfileForm({ ...profileForm, county: e.target.value })
+                                  }
+                                  disabled={!profileEditMode}
+                                  className={fieldInputClass}
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Postcode
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.postcode}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, postcode: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-600">
+                          <h5 className="text-sm font-semibold text-gray-800 dark:text-white mb-2">
+                            Bank payments (BACS)
+                          </h5>
+                          <p className="text-xs text-amber-800 dark:text-amber-200/90 bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 mb-4">
+                            Store only what you need for payroll. Restrict access to this data and your database backups.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="sm:col-span-2">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Account holder name
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.bankAccountHolderName}
+                                onChange={(e) =>
+                                  setProfileForm({
+                                    ...profileForm,
+                                    bankAccountHolderName: e.target.value
+                                  })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Sort code (6 digits)
+                              </label>
+                              <input
+                                type="text"
+                                value={profileForm.bankSortCode}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, bankSortCode: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Account number
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={profileForm.bankAccountNumber}
+                                onChange={(e) =>
+                                  setProfileForm({ ...profileForm, bankAccountNumber: e.target.value })
+                                }
+                                disabled={!profileEditMode}
+                                className={fieldInputClass}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {profileEditMode && (
+                        <div className="flex justify-end pt-2">
+                          <button
+                            type="submit"
+                            disabled={profileSaveLoading}
+                            className="px-6 py-2.5 bg-green-500 text-white text-sm font-semibold rounded-lg hover:bg-green-600 disabled:opacity-50"
+                          >
+                            {profileSaveLoading ? 'Saving…' : 'Save changes'}
+                          </button>
+                        </div>
+                      )}
+                    </form>
+                  </>
+                )}
               </div>
             </div>
           </div>

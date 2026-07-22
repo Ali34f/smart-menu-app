@@ -23,10 +23,21 @@ describe('Staff API', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    Restaurant.findById.mockReturnValue({
-      select: jest.fn().mockReturnValue({
-        lean: jest.fn().mockResolvedValue({ _id: WORKSPACE_RESTAURANT_ID }),
-      }),
+    User.countDocuments = jest.fn().mockResolvedValue(0);
+    Restaurant.findById.mockImplementation(() => {
+      const subDoc = { subscription: { status: 'active', plan: 'free' }, _id: WORKSPACE_RESTAURANT_ID };
+      return {
+        select(fields) {
+          if (fields === '_id') {
+            return { lean: jest.fn().mockResolvedValue({ _id: WORKSPACE_RESTAURANT_ID }) };
+          }
+          const inner = {
+            lean: jest.fn().mockResolvedValue(subDoc)
+          };
+          inner.then = (resolve) => Promise.resolve(subDoc).then(resolve);
+          return inner;
+        }
+      };
     });
     User.findById = jest.fn().mockReturnValue({
       select: jest.fn().mockResolvedValue({
@@ -117,6 +128,21 @@ describe('Staff API', () => {
       expect(res.body.message).toMatch(/Invalid role/i);
     });
 
+    it('returns 400 when HR fields missing for staff role', async () => {
+      const res = await request(app)
+        .post('/api/staff')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          name: 'New',
+          email: 'new@test.com',
+          password: 'pass123',
+          role: 'staff'
+        })
+        .expect(400);
+
+      expect(res.body.message).toMatch(/age|gender|job title|hourly/i);
+    });
+
     it('returns 201 when platform admin assigns restaurant owner', async () => {
       const adminToken = jwt.sign({ id: 'admin1' }, process.env.JWT_SECRET);
       User.findById = jest.fn().mockReturnValue({
@@ -159,13 +185,16 @@ describe('Staff API', () => {
 
     it('returns 201 when staff is added successfully', async () => {
       User.findOne = jest.fn().mockResolvedValue(null);
-      User.create = jest.fn().mockResolvedValue({
-        _id: 'new-staff',
-        name: 'New Staff',
-        email: 'new@test.com',
-        role: 'staff',
-        restaurantId: 'rest1',
-        invitationAccepted: false,
+      User.create = jest.fn().mockImplementation(async (data) => {
+        const doc = {
+          ...data,
+          _id: 'new-staff',
+          invitationAccepted: false,
+          async populate() {
+            return doc;
+          }
+        };
+        return doc;
       });
 
       const res = await request(app)
@@ -176,6 +205,15 @@ describe('Staff API', () => {
           email: 'new@test.com',
           password: 'pass123',
           role: 'staff',
+          age: 22,
+          gender: 'female',
+          jobTitle: 'Server',
+          hourlyRate: 11.5,
+          phone: '07123456789',
+          emergencyContactName: 'Jane Doe',
+          emergencyContactPhone: '07987654321',
+          startDate: '2025-01-15',
+          notesInternal: 'Training week 1'
         })
         .expect(201);
 
@@ -183,6 +221,12 @@ describe('Staff API', () => {
       expect(res.body.data.name).toBe('New Staff');
       expect(res.body.data.role).toBe('staff');
       expect(res.body.data.invitationAccepted).toBe(false);
+      expect(res.body.data.staffProfile).toMatchObject({
+        age: 22,
+        gender: 'female',
+        jobTitle: 'Server',
+        hourlyRate: 11.5
+      });
     });
   });
 

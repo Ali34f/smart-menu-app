@@ -1,11 +1,48 @@
 const User = require('../models/Users');
 const Restaurant = require('../models/Restaurant');
 const { createNotification } = require('../utils/notificationHelper');
+const { assertStaffCapacity } = require('../config/plans');
 
 const isPlatformAdminRole = (role) => role === 'platform_admin' || role === 'super_owner';
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 
 const RESTAURANT_TEAM_ROLES = ['owner', 'manager', 'staff'];
+const GENDERS = new Set(['female', 'male', 'non_binary', 'prefer_not_say', 'other']);
+const CONTRACT_TYPES = new Set([
+  'full_time',
+  'part_time',
+  'zero_hours',
+  'fixed_term',
+  'casual',
+  'apprenticeship'
+]);
+const PAYMENT_FREQUENCIES = new Set(['weekly', 'fortnightly', 'monthly', 'four_weekly']);
+
+/** Keys accepted on PUT / POST body (flat or under staffProfile) */
+const HR_PROFILE_KEYS = [
+  'age',
+  'gender',
+  'jobTitle',
+  'hourlyRate',
+  'phone',
+  'emergencyContactName',
+  'emergencyContactPhone',
+  'startDate',
+  'notesInternal',
+  'contractType',
+  'addressLine1',
+  'addressLine2',
+  'townCity',
+  'county',
+  'postcode',
+  'niNumber',
+  'taxCode',
+  'paymentFrequency',
+  'hoursPerWeek',
+  'bankAccountHolderName',
+  'bankSortCode',
+  'bankAccountNumber'
+];
 
 const rolesActorMayAssign = (actorRole) => {
   if (isPlatformAdminRole(actorRole)) {
@@ -28,11 +65,295 @@ const assertMayAssignRole = (actorRole, targetRole) => {
   return null;
 };
 
+const canViewStaffHr = (role) =>
+  role === 'owner' ||
+  role === 'manager' ||
+  role === 'platform_admin' ||
+  role === 'super_owner';
+
+const toPlainStaff = (doc) => {
+  if (!doc) return null;
+  const o =
+    typeof doc.toObject === 'function'
+      ? doc.toObject()
+      : JSON.parse(JSON.stringify(doc));
+  delete o.password;
+  return o;
+};
+
+/** Strip payroll/HR fields for dashboard `staff` role viewers. */
+const serializeStaffMember = (doc, includeHr) => {
+  const o = toPlainStaff(doc);
+  if (!includeHr && o && o.staffProfile) {
+    delete o.staffProfile;
+  }
+  return o;
+};
+
+const normalizeGender = (g) => {
+  const s = String(g || '').trim().toLowerCase();
+  return GENDERS.has(s) ? s : null;
+};
+
+const parseOptionalDate = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const d = new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
+const normalizeOptionalContractType = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (!CONTRACT_TYPES.has(s)) return { error: 'Invalid contract type' };
+  return { value: s };
+};
+
+const normalizeOptionalPaymentFrequency = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (!PAYMENT_FREQUENCIES.has(s)) return { error: 'Invalid payment frequency' };
+  return { value: s };
+};
+
+const normalizeOptionalSortCode = (v) => {
+  if (v === undefined || v === null || v === '') return null;
+  const digits = String(v).replace(/\D/g, '');
+  if (digits.length !== 6) {
+    return { error: 'Sort code must be 6 digits (UK)' };
+  }
+  return { value: digits };
+};
+
+const assignOptionalHrFields = (out, body) => {
+  const {
+    contractType,
+    addressLine1,
+    addressLine2,
+    townCity,
+    county,
+    postcode,
+    niNumber,
+    taxCode,
+    paymentFrequency,
+    hoursPerWeek,
+    bankAccountHolderName,
+    bankSortCode,
+    bankAccountNumber
+  } = body;
+
+  if (contractType !== undefined) {
+    if (contractType === '' || contractType == null) out.contractType = null;
+    else {
+      const c = normalizeOptionalContractType(contractType);
+      if (c && c.error) return c;
+      out.contractType = c.value;
+    }
+  }
+  if (addressLine1 !== undefined) {
+    out.addressLine1 =
+      addressLine1 === '' || addressLine1 == null
+        ? null
+        : String(addressLine1).trim().slice(0, 120);
+  }
+  if (addressLine2 !== undefined) {
+    out.addressLine2 =
+      addressLine2 === '' || addressLine2 == null
+        ? null
+        : String(addressLine2).trim().slice(0, 120);
+  }
+  if (townCity !== undefined) {
+    out.townCity =
+      townCity === '' || townCity == null ? null : String(townCity).trim().slice(0, 80);
+  }
+  if (county !== undefined) {
+    out.county = county === '' || county == null ? null : String(county).trim().slice(0, 80);
+  }
+  if (postcode !== undefined) {
+    out.postcode =
+      postcode === '' || postcode == null ? null : String(postcode).trim().slice(0, 16);
+  }
+  if (niNumber !== undefined) {
+    out.niNumber =
+      niNumber === '' || niNumber == null ? null : String(niNumber).trim().toUpperCase().slice(0, 16);
+  }
+  if (taxCode !== undefined) {
+    out.taxCode =
+      taxCode === '' || taxCode == null ? null : String(taxCode).trim().toUpperCase().slice(0, 16);
+  }
+  if (paymentFrequency !== undefined) {
+    if (paymentFrequency === '' || paymentFrequency == null) out.paymentFrequency = null;
+    else {
+      const p = normalizeOptionalPaymentFrequency(paymentFrequency);
+      if (p && p.error) return p;
+      out.paymentFrequency = p.value;
+    }
+  }
+  if (hoursPerWeek !== undefined) {
+    if (hoursPerWeek === '' || hoursPerWeek == null) out.hoursPerWeek = null;
+    else {
+      const n = Number(hoursPerWeek);
+      if (!Number.isFinite(n) || n < 0 || n > 168) {
+        return { error: 'Hours per week must be between 0 and 168' };
+      }
+      out.hoursPerWeek = Math.round(n * 100) / 100;
+    }
+  }
+  if (bankAccountHolderName !== undefined) {
+    out.bankAccountHolderName =
+      bankAccountHolderName === '' || bankAccountHolderName == null
+        ? null
+        : String(bankAccountHolderName).trim().slice(0, 120);
+  }
+  if (bankSortCode !== undefined) {
+    if (bankSortCode === '' || bankSortCode == null) out.bankSortCode = null;
+    else {
+      const sc = normalizeOptionalSortCode(bankSortCode);
+      if (sc && sc.error) return sc;
+      out.bankSortCode = sc.value;
+    }
+  }
+  if (bankAccountNumber !== undefined) {
+    if (bankAccountNumber === '' || bankAccountNumber == null) out.bankAccountNumber = null;
+    else {
+      const acct = String(bankAccountNumber).replace(/\s/g, '');
+      if (!/^\d{6,18}$/.test(acct)) {
+        return { error: 'Account number must be 6–18 digits' };
+      }
+      out.bankAccountNumber = acct;
+    }
+  }
+  return null;
+};
+
+/**
+ * Build staffProfile from invite/update body. When requireAll is true (new manager/staff), age, gender, jobTitle, hourlyRate required.
+ */
+const buildStaffProfilePayload = (body, { requireAll }) => {
+  const {
+    age,
+    gender,
+    jobTitle,
+    hourlyRate,
+    phone,
+    emergencyContactName,
+    emergencyContactPhone,
+    startDate,
+    notesInternal
+  } = body;
+
+  if (!requireAll) {
+    const out = {};
+    if (age !== undefined) {
+      if (age === '' || age === null) out.age = null;
+      else {
+        const n = Number(age);
+        if (!Number.isFinite(n) || n < 16 || n > 100) {
+          return { error: 'Age must be a number between 16 and 100' };
+        }
+        out.age = n;
+      }
+    }
+    if (gender !== undefined) {
+      const g = normalizeGender(gender);
+      if (gender !== '' && gender != null && !g) {
+        return { error: 'Invalid gender value' };
+      }
+      out.gender = g;
+    }
+    if (jobTitle !== undefined) {
+      out.jobTitle = jobTitle === '' || jobTitle == null ? null : String(jobTitle).trim().slice(0, 80);
+    }
+    if (hourlyRate !== undefined) {
+      if (hourlyRate === '' || hourlyRate == null) out.hourlyRate = null;
+      else {
+        const n = Number(hourlyRate);
+        if (!Number.isFinite(n) || n < 0) {
+          return { error: 'Hourly rate must be a non-negative number (GBP)' };
+        }
+        out.hourlyRate = Math.round(n * 100) / 100;
+      }
+    }
+    if (phone !== undefined) {
+      out.phone = phone === '' || phone == null ? null : String(phone).trim().slice(0, 20);
+    }
+    if (emergencyContactName !== undefined) {
+      out.emergencyContactName =
+        emergencyContactName === '' || emergencyContactName == null
+          ? null
+          : String(emergencyContactName).trim().slice(0, 80);
+    }
+    if (emergencyContactPhone !== undefined) {
+      out.emergencyContactPhone =
+        emergencyContactPhone === '' || emergencyContactPhone == null
+          ? null
+          : String(emergencyContactPhone).trim().slice(0, 20);
+    }
+    if (startDate !== undefined) {
+      out.startDate = parseOptionalDate(startDate);
+    }
+    if (notesInternal !== undefined) {
+      out.notesInternal =
+        notesInternal === '' || notesInternal == null
+          ? null
+          : String(notesInternal).trim().slice(0, 500);
+    }
+    const hrExtrasErr = assignOptionalHrFields(out, body);
+    if (hrExtrasErr) return hrExtrasErr;
+    return { profile: out };
+  }
+
+  const nAge = Number(age);
+  if (!Number.isFinite(nAge) || nAge < 16 || nAge > 100) {
+    return { error: 'Please provide a valid age between 16 and 100' };
+  }
+  const g = normalizeGender(gender);
+  if (!g) {
+    return { error: 'Please select a gender option' };
+  }
+  const jt = String(jobTitle || '').trim();
+  if (!jt) {
+    return { error: 'Please provide a job title or role at the restaurant (e.g. Server, Chef)' };
+  }
+  const hr = Number(hourlyRate);
+  if (!Number.isFinite(hr) || hr < 0) {
+    return { error: 'Please provide a valid hourly pay rate in GBP' };
+  }
+
+  const profile = {
+    age: nAge,
+    gender: g,
+    jobTitle: jt.slice(0, 80),
+    hourlyRate: Math.round(hr * 100) / 100,
+    phone: phone ? String(phone).trim().slice(0, 20) : null,
+    emergencyContactName: emergencyContactName
+      ? String(emergencyContactName).trim().slice(0, 80)
+      : null,
+    emergencyContactPhone: emergencyContactPhone
+      ? String(emergencyContactPhone).trim().slice(0, 20)
+      : null,
+    startDate: parseOptionalDate(startDate),
+    notesInternal: notesInternal ? String(notesInternal).trim().slice(0, 500) : null
+  };
+  const inviteExtrasErr = assignOptionalHrFields(profile, body);
+  if (inviteExtrasErr) return inviteExtrasErr;
+  return {
+    profile
+  };
+};
+
+const applyStaffProfilePatch = (staffDoc, patch) => {
+  if (!patch || typeof patch !== 'object') return;
+  staffDoc.staffProfile = staffDoc.staffProfile || {};
+  for (const [k, v] of Object.entries(patch)) {
+    staffDoc.staffProfile[k] = v;
+  }
+  staffDoc.markModified('staffProfile');
+};
+
 exports.getStaff = async (req, res, next) => {
   try {
     let staff = [];
 
-    // Platform admins: active workspace only, and exclude self. Others: full restaurant roster.
     if (isPlatformAdminRole(req.user.role)) {
       if (!req.restaurantId) {
         return res.status(400).json({
@@ -40,7 +361,6 @@ exports.getStaff = async (req, res, next) => {
           message: 'Select an active restaurant workspace before viewing staff'
         });
       }
-      // Find all users belonging to this restaurant 
       staff = await User.find({
         restaurantId: req.restaurantId,
         _id: { $ne: req.user.id }
@@ -61,9 +381,9 @@ exports.getStaff = async (req, res, next) => {
       staff = await User.find({
         restaurantId: userRestaurantId
       })
-      .select('-password')
-      .populate('restaurantId', 'name')
-      .sort({ createdAt: -1 });
+        .select('-password')
+        .populate('restaurantId', 'name')
+        .sort({ createdAt: -1 });
     }
 
     const pendingInvitations = await User.countDocuments({
@@ -71,11 +391,14 @@ exports.getStaff = async (req, res, next) => {
       invitationAccepted: false
     });
 
+    const includeHr = canViewStaffHr(req.user.role);
+    const data = staff.map((u) => serializeStaffMember(u, includeHr));
+
     res.status(200).json({
       success: true,
-      count: staff.length,
+      count: data.length,
       pendingInvitations,
-      data: staff
+      data
     });
   } catch (error) {
     console.error('Error in getStaff:', error);
@@ -87,9 +410,36 @@ exports.getStaff = async (req, res, next) => {
   }
 };
 
+/** Full member record including HR — managers, owners, platform admins only (route enforced). */
+exports.getStaffMember = async (req, res, next) => {
+  try {
+    const staff = await User.findOne({
+      _id: req.params.id,
+      restaurantId: req.restaurantId
+    })
+      .select('-password')
+      .populate('restaurantId', 'name');
+
+    if (!staff) {
+      return res.status(404).json({
+        success: false,
+        message: 'Staff member not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: serializeStaffMember(staff, true)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.addStaff = async (req, res, next) => {
   try {
-    const { name, email, password, role } = req.body;
+    const body = req.body || {};
+    const { name, email, password, role } = body;
     const normalizedEmail = normalizeEmail(email);
 
     if (!name || !normalizedEmail || !password || !role) {
@@ -123,14 +473,41 @@ exports.addStaff = async (req, res, next) => {
       });
     }
 
+    const restaurant = await Restaurant.findById(req.restaurantId).select('subscription');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const capacity = await assertStaffCapacity(restaurant, User, req.restaurantId);
+    if (!capacity.ok) {
+      return res.status(403).json({ success: false, message: capacity.message });
+    }
+
+    let staffProfile;
+    if (role === 'staff' || role === 'manager') {
+      const built = buildStaffProfilePayload(body, { requireAll: true });
+      if (built.error) {
+        return res.status(400).json({ success: false, message: built.error });
+      }
+      const optionalExtras = buildStaffProfilePayload(body, { requireAll: false });
+      if (optionalExtras.error) {
+        return res.status(400).json({ success: false, message: optionalExtras.error });
+      }
+      staffProfile = { ...optionalExtras.profile, ...built.profile };
+    }
+
     const staff = await User.create({
       restaurantId: req.restaurantId,
       name,
       email: normalizedEmail,
       password,
       role,
-      invitationAccepted: false
+      invitationAccepted: false,
+      ...(staffProfile && { staffProfile })
     });
+
+    if (typeof staff.populate === 'function') {
+      await staff.populate('restaurantId', 'name');
+    }
 
     await createNotification({
       restaurantId: req.restaurantId,
@@ -142,23 +519,23 @@ exports.addStaff = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      data: {
-        id: staff._id,
-        name: staff.name,
-        email: staff.email,
-        role: staff.role,
-        restaurantId: staff.restaurantId,
-        invitationAccepted: staff.invitationAccepted
-      }
+      data: serializeStaffMember(staff, true)
     });
   } catch (error) {
     next(error);
   }
 };
 
+const respondUpdatedStaff = (res, staff) => {
+  res.status(200).json({
+    success: true,
+    data: serializeStaffMember(staff, true)
+  });
+};
+
 exports.updateStaff = async (req, res, next) => {
   try {
-    const { name, email, role, isActive } = req.body;
+    const { name, email, role, isActive } = req.body || {};
     const normalizedEmail = email ? normalizeEmail(email) : '';
 
     const staff = await User.findOne({
@@ -189,25 +566,31 @@ exports.updateStaff = async (req, res, next) => {
       if (name) staff.name = name;
       if (normalizedEmail) staff.email = normalizedEmail;
       if (typeof isActive === 'boolean') staff.isActive = isActive;
-      const targetRestaurantId = staff.restaurantId || req.restaurantId;
+
+      const ownerProfileFlat =
+        typeof req.body.staffProfile === 'object' && req.body.staffProfile !== null
+          ? req.body.staffProfile
+          : req.body;
+      if (HR_PROFILE_KEYS.some((k) => ownerProfileFlat[k] !== undefined)) {
+        const built = buildStaffProfilePayload(ownerProfileFlat, { requireAll: false });
+        if (built.error) {
+          return res.status(400).json({ success: false, message: built.error });
+        }
+        applyStaffProfilePatch(staff, built.profile);
+      }
+
       await staff.save();
+      if (typeof staff.populate === 'function') {
+        await staff.populate('restaurantId', 'name');
+      }
       await createNotification({
-        restaurantId: targetRestaurantId,
+        restaurantId: staff.restaurantId || req.restaurantId,
         type: 'staff_updated',
         title: 'Staff member updated',
         message: `${req.user.name || req.user.email} updated ${staff.name}'s profile.`,
         createdBy: req.user.id
       });
-      return res.status(200).json({
-        success: true,
-        data: {
-          id: staff._id,
-          name: staff.name,
-          email: staff.email,
-          role: staff.role,
-          isActive: staff.isActive
-        }
-      });
+      return respondUpdatedStaff(res, staff);
     }
 
     if (role) {
@@ -223,27 +606,33 @@ exports.updateStaff = async (req, res, next) => {
     if (role) staff.role = role;
     if (typeof isActive === 'boolean') staff.isActive = isActive;
 
-    const targetRestaurantId = staff.restaurantId || req.restaurantId;
+    const profileSource =
+      req.body.staffProfile !== undefined && typeof req.body.staffProfile === 'object'
+        ? req.body.staffProfile
+        : req.body;
+    const hasProfileKeys = HR_PROFILE_KEYS.some((k) => profileSource && profileSource[k] !== undefined);
+    if (hasProfileKeys) {
+      const built = buildStaffProfilePayload(profileSource, { requireAll: false });
+      if (built.error) {
+        return res.status(400).json({ success: false, message: built.error });
+      }
+      applyStaffProfilePatch(staff, built.profile);
+    }
+
     await staff.save();
+    if (typeof staff.populate === 'function') {
+      await staff.populate('restaurantId', 'name');
+    }
 
     await createNotification({
-      restaurantId: targetRestaurantId,
+      restaurantId: staff.restaurantId || req.restaurantId,
       type: 'staff_updated',
       title: 'Staff member updated',
       message: `${req.user.name || req.user.email} updated ${staff.name}'s profile.`,
       createdBy: req.user.id
     });
 
-    res.status(200).json({
-      success: true,
-      data: {
-        id: staff._id,
-        name: staff.name,
-        email: staff.email,
-        role: staff.role,
-        isActive: staff.isActive
-      }
-    });
+    respondUpdatedStaff(res, staff);
   } catch (error) {
     next(error);
   }
@@ -263,7 +652,6 @@ exports.deleteStaff = async (req, res, next) => {
       });
     }
 
-    // cant delete owner
     if (staff.role === 'owner') {
       return res.status(403).json({
         success: false,
@@ -312,7 +700,6 @@ exports.acceptInvitation = async (req, res, next) => {
       });
     }
 
-    // Require their own password on accept — whatever was set at invite time is not meant to stay.
     if (!newPassword || typeof newPassword !== 'string' || newPassword.trim().length < 6) {
       return res.status(400).json({
         success: false,

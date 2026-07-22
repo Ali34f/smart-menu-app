@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 const MenuItem = require('../models/MenuItem');
+const Restaurant = require('../models/Restaurant');
 const PublicOrder = require('../models/PublicOrder');
 const { logActivityHelper } = require('./activity_controller');
 const { createNotification } = require('../utils/notificationHelper');
+const { assertMenuItemCapacity } = require('../config/plans');
 
 function normalizeAllergenPayloadForCreate(body) {
   const { allergens: rawAllergens, confirmedNoAllergens: rawConfirm, ...rest } = body;
@@ -98,6 +100,15 @@ exports.getMenuItem = async (req, res, next) => {
 
 exports.createMenuItem = async (req, res, next) => {
   try {
+    const restaurant = await Restaurant.findById(req.restaurantId).select('subscription');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const capacity = await assertMenuItemCapacity(restaurant, MenuItem, req.restaurantId);
+    if (!capacity.ok) {
+      return res.status(403).json({ success: false, message: capacity.message });
+    }
+
     const payload = normalizeAllergenPayloadForCreate({
       ...req.body,
       restaurantId: req.restaurantId

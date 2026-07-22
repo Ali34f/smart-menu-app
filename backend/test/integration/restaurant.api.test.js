@@ -57,6 +57,7 @@ describe('Restaurant API', () => {
         phone: '123',
         cuisineType: 'Italian',
         address: {},
+        subscription: { plan: 'free', status: 'active' }
       };
       Restaurant.findById = jest.fn().mockReturnValue({
         select: jest.fn().mockReturnValue({
@@ -75,6 +76,9 @@ describe('Restaurant API', () => {
         email: 'rest@test.com',
         cuisineType: 'Italian',
       });
+      expect(res.body.data.subscription).toBeDefined();
+      expect(res.body.data.subscription.effectivePlan).toBe('free');
+      expect(res.body.data.subscription.limits).toBeDefined();
     });
   });
 
@@ -95,7 +99,14 @@ describe('Restaurant API', () => {
         cuisineType: 'Italian',
         save: jest.fn().mockResolvedValue(undefined),
       };
-      Restaurant.findById = jest.fn().mockResolvedValue(mockRestaurant);
+      Restaurant.findById = jest
+        .fn()
+        .mockReturnValueOnce({
+          select: jest.fn().mockReturnValue({
+            lean: jest.fn().mockResolvedValue({ subscription: { status: 'active', plan: 'free' } }),
+          }),
+        })
+        .mockResolvedValueOnce(mockRestaurant);
 
       const res = await request(app)
         .put('/api/restaurant')

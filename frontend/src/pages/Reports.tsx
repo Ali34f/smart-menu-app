@@ -18,6 +18,7 @@ import NotificationBell from '../components/NotificationBell';
 import ShieldCheckIcon from '../components/ShieldCheckIcon';
 import { authService } from '../services/authService';
 import { qrService } from '../services/qrService';
+import { restaurantService } from '../services/restaurantService';
 import { formatRoleLabel } from '../utils/roleLabels';
 import AppHeaderBranding from '../components/AppHeaderBranding';
 import WorkspaceContextBar from '../components/WorkspaceContextBar';
@@ -70,6 +71,8 @@ const defaultCustomDates = () => {
   };
 };
 
+const rankReportRange = (x: string) => (x === 'custom' ? 2 : x === '30d' ? 1 : 0);
+
 const Reports: React.FC = () => {
   const navigate = useNavigate();
   const [range, setRange] = useState<'7d' | '30d' | 'custom'>('7d');
@@ -84,6 +87,7 @@ const Reports: React.FC = () => {
   const [rangeLabel, setRangeLabel] = useState('');
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
+  const [maxReportRange, setMaxReportRange] = useState<'7d' | '30d' | 'custom'>('7d');
 
   const userEmail = localStorage.getItem('userEmail') || '';
   const userName = localStorage.getItem('userName') || userEmail.split('@')[0] || 'User';
@@ -92,8 +96,28 @@ const Reports: React.FC = () => {
   const profilePicture = localStorage.getItem('profilePicture');
   const displayRole = formatRoleLabel(userRole);
 
+  const canUse30dReports = rankReportRange('30d') <= rankReportRange(maxReportRange);
+  const canUseCustomReports = rankReportRange('custom') <= rankReportRange(maxReportRange);
+
   const maxAllergenValue = Math.max(...allergenUsage.map((x) => x.value), 1);
   const maxViewsRange = Math.max(...topDishes.map((d) => d.viewsInRange ?? 0), 1);
+
+  useEffect(() => {
+    restaurantService
+      .getRestaurant()
+      .then((r) => {
+        const m = r.subscription?.limits?.maxReportRange;
+        if (m === '30d' || m === 'custom') setMaxReportRange(m);
+        else setMaxReportRange('7d');
+      })
+      .catch(() => setMaxReportRange('7d'));
+  }, []);
+
+  useEffect(() => {
+    if (rankReportRange(range) > rankReportRange(maxReportRange)) {
+      setRange(maxReportRange);
+    }
+  }, [maxReportRange, range]);
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -343,14 +367,22 @@ const Reports: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setRange('30d')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === '30d' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                  disabled={!canUse30dReports}
+                  title={!canUse30dReports ? 'Upgrade to Basic or Premium for 30-day reports.' : undefined}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                    range === '30d' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+                  } ${!canUse30dReports ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   Last 30 Days
                 </button>
                 <button
                   type="button"
                   onClick={handleCustomClick}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium ${range === 'custom' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'}`}
+                  disabled={!canUseCustomReports}
+                  title={!canUseCustomReports ? 'Custom date ranges require Premium.' : undefined}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                    range === 'custom' ? 'bg-green-500 text-white' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+                  } ${!canUseCustomReports ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   Custom
                 </button>

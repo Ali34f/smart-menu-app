@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   getStaff,
+  getStaffMember,
   addStaff,
   updateStaff,
   deleteStaff,
@@ -9,6 +10,7 @@ const {
 } = require('../controllers/staff_controller');
 
 const { protect, authorize, checkPermission } = require('../middleware/auth');
+const { requireSubscriptionWrites } = require('../middleware/subscriptionWriteGuard');
 
 // All routes require authentication
 router.use(protect);
@@ -29,7 +31,15 @@ router.post(
   '/',
   authorize('owner', 'manager', 'platform_admin', 'super_owner'),
   checkPermission('canManageStaff'),
+  requireSubscriptionWrites,
   addStaff
+);
+
+router.get(
+  '/:id',
+  authorize('owner', 'manager', 'platform_admin', 'super_owner'),
+  checkPermission('canManageStaff'),
+  getStaffMember
 );
 
 // Update staff - Owner, Manager, Platform admin
@@ -37,6 +47,7 @@ router.put(
   '/:id',
   authorize('owner', 'manager', 'platform_admin', 'super_owner'),
   checkPermission('canManageStaff'),
+  requireSubscriptionWrites,
   updateStaff
 );
 
@@ -44,6 +55,7 @@ router.put(
 router.delete(
   '/:id',
   authorize('owner', 'platform_admin', 'super_owner'),
+  requireSubscriptionWrites,
   deleteStaff
 );
 

@@ -20,6 +20,7 @@ import Allergens from './pages/Allergens';
 import QRCodes from './pages/QRCodes';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import Pricing from './pages/Pricing';
 import AllergenComplianceReport from './pages/AllergenComplianceReport';
 import AddIngredient from './pages/AddIngredient';
 import ViewIngredient from './pages/ViewIngredient';
@@ -227,6 +228,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/pricing"
+          element={
+            <ProtectedRoute>
+              <Pricing />
             </ProtectedRoute>
           }
         />

@@ -1,6 +1,12 @@
 const QRCode = require('qrcode');
 const Restaurant = require('../models/Restaurant');
 const MenuItem = require('../models/MenuItem');
+const { assertReportRangeAllowed, assertQrPremiumAccess } = require('../config/plans');
+
+const needsPremiumQr = (width, colorHex, fmt) => {
+  const f = String(fmt || 'png').toLowerCase();
+  return colorHex !== '#000000' || width !== 300 || f === 'svg' || f === 'pdf';
+};
 
 const enumerateDateKeysUTC = (start, end) => {
   const keys = [];
@@ -158,6 +164,13 @@ exports.generateQRImage = async (req, res, next) => {
       ? req.query.color
       : '#000000';
 
+    if (needsPremiumQr(width, colorHex, 'png')) {
+      const gate = assertQrPremiumAccess(restaurant);
+      if (!gate.ok) {
+        return res.status(403).json({ success: false, message: gate.message });
+      }
+    }
+
     // High ECC: still scannable if part of the code is covered (logo, print damage).
     const qrCodeDataUrl = await QRCode.toDataURL(publicMenuUrl, {
       width,
@@ -208,6 +221,13 @@ exports.downloadQR = async (req, res, next) => {
         : '#000000';
     const fmt = String(req.query.format || 'png').toLowerCase();
 
+    if (needsPremiumQr(width, colorHex, fmt)) {
+      const gate = assertQrPremiumAccess(restaurant);
+      if (!gate.ok) {
+        return res.status(403).json({ success: false, message: gate.message });
+      }
+    }
+
     if (fmt === 'svg') {
       const svg = await QRCode.toString(publicMenuUrl, {
         type: 'svg',
@@ -250,10 +270,14 @@ exports.getScanAnalytics = async (req, res, next) => {
   try {
     const { start, end, range } = parseAnalyticsRange(req);
     const restaurant = await Restaurant.findById(req.restaurantId).select(
-      'dailyScans dailyUniqueVisitors dailySessionSeconds dailySessionSamples dailyOrders'
+      'subscription dailyScans dailyUniqueVisitors dailySessionSeconds dailySessionSamples dailyOrders'
     );
     if (!restaurant) {
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const rangeCheck = assertReportRangeAllowed(restaurant, range);
+    if (!rangeCheck.ok) {
+      return res.status(403).json({ success: false, message: rangeCheck.message });
     }
     const dateKeys = enumerateDateKeysUTC(start, end);
     const dailyScans = restaurant.dailyScans || {};
@@ -316,12 +340,15 @@ exports.getScanAnalytics = async (req, res, next) => {
 exports.getRestaurantReports = async (req, res, next) => {
   try {
     const { start, end, range } = parseAnalyticsRange(req);
-    const dateKeys = enumerateDateKeysUTC(start, end);
-
     const restaurant = await Restaurant.findById(req.restaurantId).lean();
     if (!restaurant) {
       return res.status(404).json({ success: false, message: 'Restaurant not found' });
     }
+    const rangeCheck = assertReportRangeAllowed(restaurant, range);
+    if (!rangeCheck.ok) {
+      return res.status(403).json({ success: false, message: rangeCheck.message });
+    }
+    const dateKeys = enumerateDateKeysUTC(start, end);
 
     const dailyScans = restaurant.dailyScans || {};
     const dailyFiltered = restaurant.dailyFilteredViews || {};

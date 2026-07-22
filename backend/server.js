@@ -27,6 +27,16 @@ require('./models/PublicOrder');
 // Initialize Express app
 const app = express();
 
+// Stripe webhook must receive the raw body for signature verification
+const billingController = require('./controllers/billing_controller');
+app.post(
+  '/api/billing/webhook',
+  express.raw({ type: 'application/json' }),
+  (req, res, next) => {
+    Promise.resolve(billingController.handleWebhook(req, res)).catch(next);
+  }
+);
+
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -81,6 +91,7 @@ app.use('/api/activity', require('./routes/activity'));
 app.use('/api/ingredients', require('./routes/ingredient'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/restaurant', require('./routes/restaurant'));
+app.use('/api/billing', require('./routes/billing'));
 
 // Health check route
 app.get('/api/health', (req, res) => {

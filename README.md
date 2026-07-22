@@ -69,6 +69,24 @@ Allergen data reflects what the restaurant enters. The system does not guarantee
 
 ---
 
+## Billing and subscription tiers
+
+Smart Menu supports **per-restaurant** subscriptions (`free`, `basic`, `premium`) with optional **Stripe Checkout** and **Customer Portal**. Limits and grace rules are defined in `backend/config/plans.js` and enforced in API controllers and middleware.
+
+| Capability | Free | Basic | Premium |
+|------------|------|-------|---------|
+| Max menu items | 30 | 200 | Unlimited |
+| Max staff seats | 3 | 15 | Unlimited |
+| Reports range | 7 days | 30 days | Custom dates + export |
+| Ingredients module | No | Yes | Yes |
+| Advanced QR (non-default colour / SVG) | No | Yes | Yes |
+
+After a failed card payment, Stripe sets the subscription to `past_due`. The API keeps dashboard **writes** allowed until `subscription.gracePeriodEnd` (default **7 days** from the first `invoice.payment_failed`, configurable with `SUBSCRIPTION_GRACE_DAYS`). Configure Stripe keys and price IDs in `backend/.env` (see `backend/.env.example`). For local webhooks, expose the API with ngrok and register `POST /api/billing/webhook` in the Stripe dashboard (raw JSON body).
+
+**Note:** Billing accuracy and card handling are Stripe’s domain; allergen and menu accuracy remain the restaurant’s responsibility.
+
+---
+
 ## Author
 
 Jahin Khan 

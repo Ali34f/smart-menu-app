@@ -1,5 +1,7 @@
 const Ingredient = require('../models/Ingredient');
 const MenuItem = require('../models/MenuItem');
+const Restaurant = require('../models/Restaurant');
+const { assertIngredientsFullAccess } = require('../config/plans');
 
 exports.getIngredients = async (req, res, next) => {
   try {
@@ -66,6 +68,15 @@ exports.getIngredient = async (req, res, next) => {
 
 exports.createIngredient = async (req, res, next) => {
   try {
+    const restaurant = await Restaurant.findById(req.restaurantId).select('subscription');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const gate = assertIngredientsFullAccess(restaurant);
+    if (!gate.ok) {
+      return res.status(403).json({ success: false, message: gate.message });
+    }
+
     req.body.restaurantId = req.restaurantId;
 
     const ingredient = await Ingredient.create(req.body);
@@ -83,6 +94,15 @@ exports.createIngredient = async (req, res, next) => {
 
 exports.updateIngredient = async (req, res, next) => {
   try {
+    const restaurant = await Restaurant.findById(req.restaurantId).select('subscription');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const gate = assertIngredientsFullAccess(restaurant);
+    if (!gate.ok) {
+      return res.status(403).json({ success: false, message: gate.message });
+    }
+
     let ingredient = await Ingredient.findOne({
       _id: req.params.id,
       restaurantId: req.restaurantId
@@ -116,6 +136,15 @@ exports.updateIngredient = async (req, res, next) => {
 
 exports.deleteIngredient = async (req, res, next) => {
   try {
+    const restaurant = await Restaurant.findById(req.restaurantId).select('subscription');
+    if (!restaurant) {
+      return res.status(404).json({ success: false, message: 'Restaurant not found' });
+    }
+    const gate = assertIngredientsFullAccess(restaurant);
+    if (!gate.ok) {
+      return res.status(403).json({ success: false, message: gate.message });
+    }
+
     const ingredient = await Ingredient.findOne({
       _id: req.params.id,
       restaurantId: req.restaurantId

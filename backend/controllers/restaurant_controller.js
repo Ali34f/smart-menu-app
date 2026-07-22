@@ -9,6 +9,7 @@ const {
   normalizeMenuCategoriesInput,
   getDefaultMenuCategoriesForCuisine
 } = require('../utils/menuCategories');
+const { publicSubscriptionPayload } = require('../config/plans');
 
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
@@ -31,9 +32,9 @@ const normalizeBusinessHours = (input = {}) => {
 
 exports.getRestaurant = async (req, res, next) => {
   try {
-    const restaurant = await Restaurant.findById(req.restaurantId).select(
-      'name email phone cuisineType address welcomeMessage businessHours menuCategories'
-    ).lean();
+    const restaurant = await Restaurant.findById(req.restaurantId)
+      .select('name email phone cuisineType address welcomeMessage businessHours menuCategories subscription')
+      .lean();
 
     if (!restaurant) {
       return res.status(404).json({
@@ -42,9 +43,14 @@ exports.getRestaurant = async (req, res, next) => {
       });
     }
 
+    const { subscription: _rawSubscription, ...profile } = restaurant;
+
     res.status(200).json({
       success: true,
-      data: restaurant
+      data: {
+        ...profile,
+        subscription: publicSubscriptionPayload(restaurant)
+      }
     });
   } catch (error) {
     next(error);
